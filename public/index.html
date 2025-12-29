@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>英语口语听力练习 - English Speaking Practice</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎤 英语口语听力练习</h1>
+            <p class="subtitle">English Speaking & Listening Practice</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Conversation Display Area -->
+            <div class="conversation-area" id="conversationArea">
+                <div class="welcome-message">
+                    <p>👋 欢迎！点击下方按钮开始录音，练习你的英语口语吧！</p>
+                    <p class="english-text">Welcome! Click the button below to start recording and practice your English speaking!</p>
+                </div>
+            </div>
+
+            <!-- Recording Controls -->
+            <div class="controls">
+                <button id="recordBtn" class="record-btn">
+                    <span class="btn-icon">🎤</span>
+                    <span class="btn-text">开始录音</span>
+                </button>
+                <button id="stopBtn" class="stop-btn" disabled>
+                    <span class="btn-icon">⏹️</span>
+                    <span class="btn-text">停止录音</span>
+                </button>
+            </div>
+
+            <!-- Status Display -->
+            <div class="status" id="status">
+                <p>准备就绪</p>
+            </div>
+
+            <!-- Loading Indicator -->
+            <div class="loading" id="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>处理中...</p>
+            </div>
+        </div>
+
+        <footer>
+            <p>使用 AI Builders API 构建 | Built with AI Builders API</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
