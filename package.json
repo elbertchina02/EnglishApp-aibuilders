@@ -1,6 +1,6 @@
 {
   "name": "english-app-aibuilders",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "English speaking and listening practice app for middle school students",
   "main": "server.js",
   "scripts": {
@@ -29,4 +29,3 @@
     "nodemon": "^3.0.2"
   }
 }
-
