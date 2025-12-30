@@ -15,7 +15,6 @@ const AI_BUILDER_BASE_URL = 'https://space.ai-builders.com/backend';
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
 
 // Configure multer for audio file uploads
 const upload = multer({ 
@@ -23,6 +22,7 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
 });
 
+// API routes (must be before static files)
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -30,11 +30,19 @@ app.get('/health', (req, res) => {
 
 // Version endpoint
 app.get('/api/version', (req, res) => {
-  const packageJson = require('./package.json');
-  res.json({ 
-    version: packageJson.version,
-    name: packageJson.name
-  });
+  try {
+    const packageJson = require('./package.json');
+    res.json({ 
+      version: packageJson.version,
+      name: packageJson.name
+    });
+  } catch (error) {
+    console.error('Error reading package.json:', error);
+    res.status(500).json({ 
+      error: 'Failed to read version',
+      version: 'unknown'
+    });
+  }
 });
 
 // Transcribe audio endpoint
@@ -187,7 +195,10 @@ app.post('/api/tts', async (req, res) => {
   }
 });
 
-// Serve the main page
+// Static files (must be after API routes)
+app.use(express.static('public'));
+
+// Serve the main page (fallback)
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -195,5 +206,6 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Make sure AI_BUILDER_TOKEN is set in your .env file`);
+  console.log(`Version endpoint: http://localhost:${PORT}/api/version`);
 });
 
