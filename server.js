@@ -28,7 +28,24 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Version endpoint
+// Version endpoint - use /version instead of /api/version to avoid conflicts
+app.get('/version', (req, res) => {
+  try {
+    const packageJson = require('./package.json');
+    res.json({ 
+      version: packageJson.version,
+      name: packageJson.name
+    });
+  } catch (error) {
+    console.error('Error reading package.json:', error);
+    res.status(500).json({ 
+      error: 'Failed to read version',
+      version: 'unknown'
+    });
+  }
+});
+
+// Also support /api/version for backward compatibility
 app.get('/api/version', (req, res) => {
   try {
     const packageJson = require('./package.json');

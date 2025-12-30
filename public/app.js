@@ -338,14 +338,23 @@ function showLoading(show) {
     loading.style.display = show ? 'block' : 'none';
 }
 
-// Load version info
+// Load version info - try /version first, fallback to /api/version
 async function loadVersion() {
     try {
-        const response = await fetch('/api/version');
-        const data = await response.json();
-        const versionInfo = document.getElementById('versionInfo');
-        if (versionInfo) {
-            versionInfo.textContent = `v${data.version}`;
+        // Try /version first (simpler path)
+        let response = await fetch('/version');
+        if (!response.ok) {
+            // Fallback to /api/version
+            response = await fetch('/api/version');
+        }
+        if (response.ok) {
+            const data = await response.json();
+            const versionInfo = document.getElementById('versionInfo');
+            if (versionInfo) {
+                versionInfo.textContent = `v${data.version}`;
+            }
+        } else {
+            throw new Error('Version endpoint not available');
         }
     } catch (error) {
         console.error('Error loading version:', error);
