@@ -186,7 +186,7 @@ async function getAIResponse() {
     return await response.json();
 }
 
-// Speak text using Web Speech Synthesis API
+// Speak text using Web Speech Synthesis API with Android compatibility fixes
 function speakText(text) {
     return new Promise((resolve, reject) => {
         if (!('speechSynthesis' in window)) {
@@ -198,22 +198,56 @@ function speakText(text) {
         // Cancel any ongoing speech
         window.speechSynthesis.cancel();
         
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'en-US';
-        utterance.rate = 0.9; // Slightly slower for students
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-        
-        utterance.onend = () => {
-            resolve();
-        };
-        
-        utterance.onerror = (error) => {
-            console.error('Speech synthesis error:', error);
-            resolve(); // Don't fail the whole process if TTS fails
-        };
-        
-        window.speechSynthesis.speak(utterance);
+        // Wait a bit for cancellation to complete (especially important on Android)
+        setTimeout(() => {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US';
+            utterance.rate = 0.9; // Slightly slower for students
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            
+            // Android compatibility: Set up event handlers before speaking
+            let resolved = false;
+            
+            utterance.onstart = () => {
+                console.log('Speech started');
+            };
+            
+            utterance.onend = () => {
+                if (!resolved) {
+                    resolved = true;
+                    resolve();
+                }
+            };
+            
+            utterance.onerror = (error) => {
+                console.error('Speech synthesis error:', error);
+                if (!resolved) {
+                    resolved = true;
+                    // On Android, sometimes errors occur but speech still works
+                    // Wait a bit before resolving to give it a chance
+                    setTimeout(() => resolve(), 100);
+                }
+            };
+            
+            // Android fix: Some Android browsers need a small delay
+            // Also ensure we're in a user interaction context
+            try {
+                window.speechSynthesis.speak(utterance);
+                
+                // Fallback timeout for Android (some devices don't fire events properly)
+                setTimeout(() => {
+                    if (!resolved) {
+                        console.log('Speech timeout - assuming completed');
+                        resolved = true;
+                        resolve();
+                    }
+                }, Math.max(text.length * 100, 5000)); // At least 5 seconds or based on text length
+            } catch (error) {
+                console.error('Error starting speech:', error);
+                resolve(); // Don't fail the whole process
+            }
+        }, 100);
     });
 }
 
@@ -235,6 +269,23 @@ function addMessageToConversation(role, text) {
     
     messageDiv.appendChild(header);
     messageDiv.appendChild(content);
+    
+    // Add play button for assistant messages (for Android compatibility)
+    if (role === 'assistant' && 'speechSynthesis' in window) {
+        const playButton = document.createElement('button');
+        playButton.className = 'play-btn';
+        playButton.innerHTML = '🔊 播放声音';
+        playButton.title = '点击播放这段文字';
+        playButton.onclick = () => {
+            playButton.disabled = true;
+            playButton.innerHTML = '⏸️ 播放中...';
+            speakText(text).then(() => {
+                playButton.disabled = false;
+                playButton.innerHTML = '🔊 播放声音';
+            });
+        };
+        messageDiv.appendChild(playButton);
+    }
     
     // Remove welcome message if it exists
     const welcomeMsg = conversationArea.querySelector('.welcome-message');
