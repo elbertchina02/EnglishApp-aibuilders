@@ -338,6 +338,25 @@ function showLoading(show) {
     loading.style.display = show ? 'block' : 'none';
 }
 
+// Load version info
+async function loadVersion() {
+    try {
+        const response = await fetch('/api/version');
+        const data = await response.json();
+        const versionInfo = document.getElementById('versionInfo');
+        if (versionInfo) {
+            versionInfo.textContent = `v${data.version}`;
+        }
+    } catch (error) {
+        console.error('Error loading version:', error);
+        const versionInfo = document.getElementById('versionInfo');
+        if (versionInfo) {
+            versionInfo.textContent = 'v?';
+        }
+    }
+}
+
 // Initialize when page loads
 init();
+loadVersion();
 

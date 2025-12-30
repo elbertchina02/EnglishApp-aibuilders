@@ -28,6 +28,15 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Version endpoint
+app.get('/api/version', (req, res) => {
+  const packageJson = require('./package.json');
+  res.json({ 
+    version: packageJson.version,
+    name: packageJson.name
+  });
+});
+
 // Transcribe audio endpoint
 app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
   try {

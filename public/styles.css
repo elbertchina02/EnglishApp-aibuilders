@@ -257,6 +257,13 @@ footer {
     font-size: 0.85em;
 }
 
+.version-info {
+    margin-top: 8px;
+    font-size: 0.75em;
+    color: #bbb;
+    font-family: 'Courier New', monospace;
+}
+
 /* Responsive design */
 @media (max-width: 600px) {
     .container {
