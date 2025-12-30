@@ -186,32 +186,72 @@ async function getAIResponse() {
     return await response.json();
 }
 
-// Speak text using Web Speech Synthesis API with Android compatibility fixes
+// Speak text using backend TTS API (more reliable on mobile devices)
 function speakText(text) {
     return new Promise((resolve, reject) => {
+        // Use backend TTS API for better mobile compatibility
+        fetch('/api/tts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ text: text })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('TTS request failed');
+            }
+            return response.blob();
+        })
+        .then(audioBlob => {
+            // Create audio element and play
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(audioUrl);
+            
+            audio.onended = () => {
+                URL.revokeObjectURL(audioUrl);
+                resolve();
+            };
+            
+            audio.onerror = (error) => {
+                console.error('Audio playback error:', error);
+                URL.revokeObjectURL(audioUrl);
+                resolve(); // Don't fail the whole process
+            };
+            
+            // Play audio
+            audio.play().catch(error => {
+                console.error('Error playing audio:', error);
+                URL.revokeObjectURL(audioUrl);
+                resolve(); // Don't fail if play fails
+            });
+        })
+        .catch(error => {
+            console.error('TTS API error:', error);
+            // Fallback to Web Speech Synthesis if backend fails
+            fallbackToWebSpeech(text).then(resolve).catch(() => resolve());
+        });
+    });
+}
+
+// Fallback to Web Speech Synthesis API (for desktop browsers)
+function fallbackToWebSpeech(text) {
+    return new Promise((resolve, reject) => {
         if (!('speechSynthesis' in window)) {
-            console.warn('Speech synthesis not supported');
             resolve();
             return;
         }
         
-        // Cancel any ongoing speech
         window.speechSynthesis.cancel();
         
-        // Wait a bit for cancellation to complete (especially important on Android)
         setTimeout(() => {
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'en-US';
-            utterance.rate = 0.9; // Slightly slower for students
+            utterance.rate = 0.9;
             utterance.pitch = 1.0;
             utterance.volume = 1.0;
             
-            // Android compatibility: Set up event handlers before speaking
             let resolved = false;
-            
-            utterance.onstart = () => {
-                console.log('Speech started');
-            };
             
             utterance.onend = () => {
                 if (!resolved) {
@@ -220,32 +260,23 @@ function speakText(text) {
                 }
             };
             
-            utterance.onerror = (error) => {
-                console.error('Speech synthesis error:', error);
+            utterance.onerror = () => {
                 if (!resolved) {
                     resolved = true;
-                    // On Android, sometimes errors occur but speech still works
-                    // Wait a bit before resolving to give it a chance
-                    setTimeout(() => resolve(), 100);
+                    resolve();
                 }
             };
             
-            // Android fix: Some Android browsers need a small delay
-            // Also ensure we're in a user interaction context
             try {
                 window.speechSynthesis.speak(utterance);
-                
-                // Fallback timeout for Android (some devices don't fire events properly)
                 setTimeout(() => {
                     if (!resolved) {
-                        console.log('Speech timeout - assuming completed');
                         resolved = true;
                         resolve();
                     }
-                }, Math.max(text.length * 100, 5000)); // At least 5 seconds or based on text length
+                }, Math.max(text.length * 100, 5000));
             } catch (error) {
-                console.error('Error starting speech:', error);
-                resolve(); // Don't fail the whole process
+                resolve();
             }
         }, 100);
     });
@@ -270,8 +301,8 @@ function addMessageToConversation(role, text) {
     messageDiv.appendChild(header);
     messageDiv.appendChild(content);
     
-    // Add play button for assistant messages (for Android compatibility)
-    if (role === 'assistant' && 'speechSynthesis' in window) {
+    // Add play button for assistant messages (works on all devices)
+    if (role === 'assistant') {
         const playButton = document.createElement('button');
         playButton.className = 'play-btn';
         playButton.innerHTML = '🔊 播放声音';

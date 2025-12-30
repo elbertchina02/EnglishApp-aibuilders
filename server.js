@@ -3,6 +3,9 @@ const cors = require('cors');
 const multer = require('multer');
 const axios = require('axios');
 const path = require('path');
+const gtts = require('gtts');
+const fs = require('fs');
+const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
 const app = express();
@@ -105,6 +108,72 @@ app.post('/api/chat', async (req, res) => {
     res.status(error.response?.status || 500).json({
       error: 'Chat completion failed',
       details: error.response?.data || error.message
+    });
+  }
+});
+
+// Text-to-Speech endpoint
+app.post('/api/tts', async (req, res) => {
+  try {
+    const { text } = req.body;
+
+    if (!text || typeof text !== 'string' || text.trim().length === 0) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+
+    // Limit text length to prevent abuse
+    if (text.length > 1000) {
+      return res.status(400).json({ error: 'Text too long (max 1000 characters)' });
+    }
+
+    // Generate unique filename
+    const filename = `${uuidv4()}.mp3`;
+    const filepath = path.join(__dirname, 'temp', filename);
+
+    // Ensure temp directory exists
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    // Generate speech using Google TTS
+    return new Promise((resolve, reject) => {
+      const tts = new gtts(text, 'en');
+      
+      tts.save(filepath, (err) => {
+        if (err) {
+          console.error('TTS error:', err);
+          res.status(500).json({ error: 'TTS generation failed', details: err.message });
+          return resolve(); // Resolve to end the promise chain
+        }
+
+        // Read the generated audio file
+        fs.readFile(filepath, (err, data) => {
+          // Clean up the file
+          fs.unlink(filepath, (unlinkErr) => {
+            if (unlinkErr) console.error('Error deleting temp file:', unlinkErr);
+          });
+
+          if (err) {
+            console.error('Error reading audio file:', err);
+            res.status(500).json({ error: 'Failed to read audio file' });
+            return resolve();
+          }
+
+          // Send audio file
+          res.setHeader('Content-Type', 'audio/mpeg');
+          res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+          res.setHeader('Cache-Control', 'no-cache');
+          res.send(data);
+          resolve();
+        });
+      });
+    });
+  } catch (error) {
+    console.error('TTS endpoint error:', error);
+    res.status(500).json({
+      error: 'TTS failed',
+      details: error.message
     });
   }
 });
