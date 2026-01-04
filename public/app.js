@@ -161,24 +161,26 @@ async function processAudio(audioBlob) {
         
         // Add user message to conversation
         addMessage('user', transcription);
-        conversationHistory.push({
-            role: 'user',
-            content: transcription
-        });
         
         updateStatus('正在生成回复...');
         
-        // Get AI response
+        // Get AI response (history will be sent automatically)
         const response = await getChatResponse(transcription);
         const aiMessage = response.choices[0].message.content;
         console.log('AI Response:', aiMessage);
         
-        // Add AI message to conversation
-        addMessage('assistant', aiMessage);
+        // Add messages to history after successful response
+        conversationHistory.push({
+            role: 'user',
+            content: transcription
+        });
         conversationHistory.push({
             role: 'assistant',
             content: aiMessage
         });
+        
+        // Add AI message to conversation display
+        addMessage('assistant', aiMessage);
         
         updateStatus('正在播放语音...');
         
@@ -217,6 +219,11 @@ async function transcribeAudio(audioBlob) {
 
 // Get chat response using AI Builders API
 async function getChatResponse(message) {
+    // Filter out system message from history when sending to backend
+    const historyToSend = conversationHistory.filter(msg => msg.role !== 'system');
+    
+    console.log('Sending chat request, history length:', historyToSend.length);
+    
     const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -224,12 +231,13 @@ async function getChatResponse(message) {
         },
         body: JSON.stringify({
             message: message,
-            history: conversationHistory
+            history: historyToSend
         })
     });
     
     if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({ error: 'Chat failed' }));
+        console.error('Chat error:', error);
         throw new Error(error.error || 'Chat failed');
     }
     
