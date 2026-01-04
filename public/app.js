@@ -17,66 +17,112 @@ const conversationArea = document.getElementById('conversationArea');
 let mediaRecorder;
 let audioChunks = [];
 let isRecording = false;
+let audioUnlocked = false;
+let ttsAudioElement = null;
 
 // Check if browser supports MediaRecorder
 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     alert('您的浏览器不支持录音功能，请使用Chrome、Firefox或Edge浏览器。');
 }
 
+// Unlock audio for iOS and WeChat
+function unlockAudio() {
+    console.log('Attempting to unlock audio...');
+    
+    // Function to unlock
+    const unlock = () => {
+        if (audioUnlocked) return;
+        
+        console.log('Audio unlock triggered');
+        
+        // Try to play a silent sound
+        if (ttsAudioElement) {
+            ttsAudioElement.src = 'data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+            ttsAudioElement.play().then(() => {
+                console.log('Audio unlocked successfully');
+                audioUnlocked = true;
+            }).catch(e => {
+                console.log('Audio unlock attempt:', e.message);
+            });
+        }
+    };
+    
+    // Try to unlock on various events
+    document.addEventListener('touchstart', unlock, { once: true });
+    document.addEventListener('touchend', unlock, { once: true });
+    document.addEventListener('click', unlock, { once: true });
+    
+    // WeChat specific unlock
+    if (typeof WeixinJSBridge !== 'undefined') {
+        console.log('WeChat detected, using WeixinJSBridge');
+        WeixinJSBridge.invoke('getNetworkType', {}, unlock);
+    } else {
+        document.addEventListener('WeixinJSBridgeReady', () => {
+            console.log('WeixinJSBridge ready');
+            WeixinJSBridge.invoke('getNetworkType', {}, unlock);
+        }, false);
+    }
+}
+
 // Initialize
 async function init() {
     try {
+        // Get the audio element
+        ttsAudioElement = document.getElementById('ttsAudio');
+        if (!ttsAudioElement) {
+            // Create audio element if it doesn't exist
+            ttsAudioElement = document.createElement('audio');
+            ttsAudioElement.id = 'ttsAudio';
+            ttsAudioElement.preload = 'auto';
+            ttsAudioElement.style.display = 'none';
+            document.body.appendChild(ttsAudioElement);
+        }
+        
+        // Unlock audio for iOS/WeChat
+        unlockAudio();
+        
         // Request microphone permission
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(track => track.stop()); // Stop immediately, we'll start recording when user clicks
         
-        recordBtn.addEventListener('click', startRecording);
-        stopBtn.addEventListener('click', stopRecording);
+        // Create MediaRecorder
+        mediaRecorder = new MediaRecorder(stream);
         
-        updateStatus('准备就绪 - Ready');
+        // Handle data available event
+        mediaRecorder.ondataavailable = (event) => {
+            audioChunks.push(event.data);
+        };
+        
+        // Handle stop event
+        mediaRecorder.onstop = async () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            audioChunks = [];
+            
+            // Process the audio
+            await processAudio(audioBlob);
+        };
+        
+        updateStatus('准备就绪，点击"开始录音"按钮开始');
     } catch (error) {
-        console.error('Error accessing microphone:', error);
-        updateStatus('无法访问麦克风 - Cannot access microphone');
-        alert('请允许访问麦克风权限');
+        console.error('Initialization error:', error);
+        updateStatus('初始化失败: ' + error.message);
+        alert('无法访问麦克风，请确保已授予麦克风权限。');
     }
 }
 
 // Start recording
-async function startRecording() {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
-        audioChunks = [];
-        mediaRecorder = new MediaRecorder(stream, {
-            mimeType: 'audio/webm;codecs=opus'
-        });
-
-        mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-                audioChunks.push(event.data);
-            }
-        };
-
-        mediaRecorder.onstop = async () => {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-            await processAudio(audioBlob);
-            
-            // Stop all tracks
-            stream.getTracks().forEach(track => track.stop());
-        };
-
-        mediaRecorder.start();
-        isRecording = true;
-        
-        recordBtn.classList.add('recording');
-        recordBtn.disabled = true;
-        stopBtn.disabled = false;
-        updateStatus('正在录音... - Recording...');
-    } catch (error) {
-        console.error('Error starting recording:', error);
-        updateStatus('录音失败 - Recording failed');
-        alert('无法开始录音，请检查麦克风权限');
+function startRecording() {
+    if (!mediaRecorder) {
+        alert('录音功能未初始化，请刷新页面重试。');
+        return;
     }
+    
+    audioChunks = [];
+    mediaRecorder.start();
+    isRecording = true;
+    
+    recordBtn.disabled = true;
+    stopBtn.disabled = false;
+    updateStatus('🎤 正在录音...');
 }
 
 // Stop recording
@@ -85,70 +131,60 @@ function stopRecording() {
         mediaRecorder.stop();
         isRecording = false;
         
-        recordBtn.classList.remove('recording');
         recordBtn.disabled = false;
         stopBtn.disabled = true;
-        updateStatus('处理中... - Processing...');
+        updateStatus('处理中...');
     }
 }
 
-// Process audio: transcribe -> chat -> speak
+// Process audio
 async function processAudio(audioBlob) {
-    showLoading(true);
-    
     try {
-        // Step 1: Transcribe audio to text
-        updateStatus('正在转写语音... - Transcribing...');
+        showLoading(true);
+        updateStatus('正在转换语音...');
+        
+        // Transcribe audio
         const transcription = await transcribeAudio(audioBlob);
-        
-        if (!transcription || !transcription.text) {
-            throw new Error('转录失败 - Transcription failed');
-        }
-        
-        const userText = transcription.text.trim();
-        if (!userText) {
-            throw new Error('未检测到语音内容 - No speech detected');
-        }
+        console.log('Transcription:', transcription);
         
         // Add user message to conversation
-        addMessageToConversation('user', userText);
+        addMessage('user', transcription);
         conversationHistory.push({
             role: 'user',
-            content: userText
+            content: transcription
         });
         
-        // Step 2: Get response from AI
-        updateStatus('正在生成回复... - Generating response...');
-        const aiResponse = await getAIResponse();
+        updateStatus('正在生成回复...');
         
-        if (!aiResponse || !aiResponse.choices || !aiResponse.choices[0]) {
-            throw new Error('AI回复失败 - AI response failed');
-        }
+        // Get AI response
+        const response = await getChatResponse(transcription);
+        const aiMessage = response.choices[0].message.content;
+        console.log('AI Response:', aiMessage);
         
-        const assistantText = aiResponse.choices[0].message.content.trim();
-        
-        // Add assistant message to conversation
-        addMessageToConversation('assistant', assistantText);
+        // Add AI message to conversation
+        addMessage('assistant', aiMessage);
         conversationHistory.push({
             role: 'assistant',
-            content: assistantText
+            content: aiMessage
         });
         
-        // Step 3: Speak the response
-        updateStatus('正在朗读回复... - Speaking response...');
-        await speakText(assistantText);
+        updateStatus('正在播放语音...');
         
-        updateStatus('完成！可以继续录音 - Done! You can continue recording');
-    } catch (error) {
-        console.error('Error processing audio:', error);
-        updateStatus('处理失败 - Processing failed: ' + error.message);
-        alert('处理失败：' + error.message);
-    } finally {
+        // Speak the response
+        await speakText(aiMessage);
+        
+        updateStatus('准备就绪，点击"开始录音"继续对话');
         showLoading(false);
+        
+    } catch (error) {
+        console.error('Processing error:', error);
+        updateStatus('处理失败: ' + error.message);
+        showLoading(false);
+        alert('处理失败，请重试。错误: ' + error.message);
     }
 }
 
-// Transcribe audio using API
+// Transcribe audio using AI Builders API
 async function transcribeAudio(audioBlob) {
     const formData = new FormData();
     formData.append('audio', audioBlob, 'recording.webm');
@@ -163,18 +199,20 @@ async function transcribeAudio(audioBlob) {
         throw new Error(error.error || 'Transcription failed');
     }
     
-    return await response.json();
+    const data = await response.json();
+    return data.text;
 }
 
-// Get AI response using API
-async function getAIResponse() {
+// Get chat response using AI Builders API
+async function getChatResponse(message) {
     const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            messages: conversationHistory
+            message: message,
+            history: conversationHistory
         })
     });
     
@@ -186,143 +224,151 @@ async function getAIResponse() {
     return await response.json();
 }
 
-// Speak text using backend TTS API (more reliable on mobile devices)
-function speakText(text) {
-    return new Promise((resolve, reject) => {
-        // Use backend TTS API for better mobile compatibility
-        fetch('/api/tts', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ text: text })
-        })
-        .then(response => {
+// Speak text using backend TTS API with <audio> element (best mobile compatibility)
+async function speakText(text) {
+    return new Promise(async (resolve) => {
+        try {
+            console.log('Attempting backend TTS...');
+            const response = await fetch('/api/tts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ text: text })
+            });
+
             if (!response.ok) {
-                throw new Error('TTS request failed');
+                const errorData = await response.json().catch(() => ({}));
+                console.error('Backend TTS failed:', response.status, errorData);
+                
+                // Fallback to Web Speech Synthesis
+                if (errorData.fallback || response.status >= 500) {
+                    console.log('Using Web Speech Synthesis fallback...');
+                    useFallbackTTS(text, resolve);
+                    return;
+                }
             }
-            return response.blob();
-        })
-        .then(audioBlob => {
-            // Create audio element and play
-            const audioUrl = URL.createObjectURL(audioBlob);
-            const audio = new Audio(audioUrl);
+
+            // Get audio blob
+            const audioBlob = await response.blob();
             
-            audio.onended = () => {
+            // Check if we got valid audio data
+            if (audioBlob.size === 0) {
+                console.error('Received empty audio blob, using fallback');
+                useFallbackTTS(text, resolve);
+                return;
+            }
+
+            console.log('Backend TTS succeeded, audio size:', audioBlob.size);
+            
+            // Use the dedicated audio element
+            const audioUrl = URL.createObjectURL(audioBlob);
+            
+            if (!ttsAudioElement) {
+                ttsAudioElement = document.getElementById('ttsAudio');
+            }
+            
+            // Set up event listeners
+            const onEnded = () => {
+                console.log('Audio playback completed');
                 URL.revokeObjectURL(audioUrl);
+                ttsAudioElement.removeEventListener('ended', onEnded);
+                ttsAudioElement.removeEventListener('error', onError);
                 resolve();
             };
             
-            audio.onerror = (error) => {
-                console.error('Audio playback error:', error);
+            const onError = (e) => {
+                console.error('Audio playback error:', e);
                 URL.revokeObjectURL(audioUrl);
-                resolve(); // Don't fail the whole process
+                ttsAudioElement.removeEventListener('ended', onEnded);
+                ttsAudioElement.removeEventListener('error', onError);
+                
+                // Try fallback
+                console.log('Audio playback failed, trying fallback...');
+                useFallbackTTS(text, resolve);
             };
             
-            // Play audio
-            audio.play().catch(error => {
-                console.error('Error playing audio:', error);
+            ttsAudioElement.addEventListener('ended', onEnded);
+            ttsAudioElement.addEventListener('error', onError);
+            
+            // Set source and play
+            ttsAudioElement.src = audioUrl;
+            ttsAudioElement.load();
+            
+            try {
+                await ttsAudioElement.play();
+                console.log('Audio play started successfully');
+            } catch (playError) {
+                console.error('Audio play() failed:', playError);
                 URL.revokeObjectURL(audioUrl);
-                resolve(); // Don't fail if play fails
-            });
-        })
-        .catch(error => {
-            console.error('TTS API error:', error);
-            // Fallback to Web Speech Synthesis if backend fails
-            fallbackToWebSpeech(text).then(resolve).catch(() => resolve());
-        });
+                ttsAudioElement.removeEventListener('ended', onEnded);
+                ttsAudioElement.removeEventListener('error', onError);
+                
+                console.log('Play failed, trying fallback...');
+                useFallbackTTS(text, resolve);
+            }
+
+        } catch (error) {
+            console.error('TTS error:', error);
+            console.log('Exception caught, using fallback...');
+            useFallbackTTS(text, resolve);
+        }
     });
 }
 
-// Fallback to Web Speech Synthesis API (for desktop browsers)
-function fallbackToWebSpeech(text) {
-    return new Promise((resolve, reject) => {
-        if (!('speechSynthesis' in window)) {
-            resolve();
-            return;
-        }
+// Fallback TTS using Web Speech Synthesis API
+function useFallbackTTS(text, resolve) {
+    if ('speechSynthesis' in window) {
+        console.log('Starting Web Speech Synthesis...');
         
+        // Cancel any ongoing speech
         window.speechSynthesis.cancel();
         
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.9;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        
+        utterance.onstart = () => {
+            console.log('Web Speech Synthesis started');
+        };
+        
+        utterance.onend = () => {
+            console.log('Web Speech Synthesis completed');
+            resolve();
+        };
+        
+        utterance.onerror = (e) => {
+            console.error('Web Speech Synthesis error:', e);
+            resolve();
+        };
+        
+        // Small delay to ensure it works on mobile
         setTimeout(() => {
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'en-US';
-            utterance.rate = 0.9;
-            utterance.pitch = 1.0;
-            utterance.volume = 1.0;
-            
-            let resolved = false;
-            
-            utterance.onend = () => {
-                if (!resolved) {
-                    resolved = true;
-                    resolve();
-                }
-            };
-            
-            utterance.onerror = () => {
-                if (!resolved) {
-                    resolved = true;
-                    resolve();
-                }
-            };
-            
-            try {
-                window.speechSynthesis.speak(utterance);
-                setTimeout(() => {
-                    if (!resolved) {
-                        resolved = true;
-                        resolve();
-                    }
-                }, Math.max(text.length * 100, 5000));
-            } catch (error) {
-                resolve();
-            }
+            window.speechSynthesis.speak(utterance);
         }, 100);
-    });
+    } else {
+        console.error('No TTS available');
+        resolve();
+    }
 }
 
 // Add message to conversation display
-function addMessageToConversation(role, text) {
+function addMessage(role, content) {
     const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${role}`;
+    messageDiv.className = `message ${role === 'user' ? 'user-message' : 'ai-message'}`;
     
-    const header = document.createElement('div');
-    header.className = 'message-header';
-    header.textContent = role === 'user' ? '👤 你 (You)' : '🤖 AI老师 (AI Teacher)';
+    const label = role === 'user' ? '你' : 'AI';
+    const icon = role === 'user' ? '👤' : '🤖';
     
-    const content = document.createElement('div');
-    content.className = 'message-content';
-    if (role === 'assistant') {
-        content.classList.add('english');
-    }
-    content.textContent = text;
-    
-    messageDiv.appendChild(header);
-    messageDiv.appendChild(content);
-    
-    // Add play button for assistant messages (works on all devices)
-    if (role === 'assistant') {
-        const playButton = document.createElement('button');
-        playButton.className = 'play-btn';
-        playButton.innerHTML = '🔊 播放声音';
-        playButton.title = '点击播放这段文字';
-        playButton.onclick = () => {
-            playButton.disabled = true;
-            playButton.innerHTML = '⏸️ 播放中...';
-            speakText(text).then(() => {
-                playButton.disabled = false;
-                playButton.innerHTML = '🔊 播放声音';
-            });
-        };
-        messageDiv.appendChild(playButton);
-    }
-    
-    // Remove welcome message if it exists
-    const welcomeMsg = conversationArea.querySelector('.welcome-message');
-    if (welcomeMsg) {
-        welcomeMsg.remove();
-    }
+    messageDiv.innerHTML = `
+        <div class="message-header">
+            <span class="message-icon">${icon}</span>
+            <strong>${label}:</strong>
+        </div>
+        <div class="message-content">${content}</div>
+    `;
     
     conversationArea.appendChild(messageDiv);
     conversationArea.scrollTop = conversationArea.scrollHeight;
@@ -330,27 +376,17 @@ function addMessageToConversation(role, text) {
 
 // Update status message
 function updateStatus(message) {
-    status.textContent = message;
+    status.innerHTML = `<p>${message}</p>`;
 }
 
 // Show/hide loading indicator
 function showLoading(show) {
-    loading.style.display = show ? 'block' : 'none';
+    loading.style.display = show ? 'flex' : 'none';
 }
 
-// Load version info - version is embedded in HTML, no API call needed
-function loadVersion() {
-    // Version is already embedded in HTML, no need to fetch from API
-    // This avoids 404 errors and makes the app more reliable
-    const versionInfo = document.getElementById('versionInfo');
-    if (versionInfo && !versionInfo.textContent || versionInfo.textContent === '版本加载中...') {
-        // If somehow the version wasn't set, it's already in HTML
-        // Just ensure it's displayed
-        console.log('Version loaded from HTML');
-    }
-}
+// Event listeners
+recordBtn.addEventListener('click', startRecording);
+stopBtn.addEventListener('click', stopRecording);
 
 // Initialize when page loads
-init();
-loadVersion();
-
+document.addEventListener('DOMContentLoaded', init);
