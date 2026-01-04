@@ -159,35 +159,71 @@ app.post('/api/tts', async (req, res) => {
       return res.status(400).json({ error: 'Text too long (max 1000 characters)' });
     }
 
-    // Use Google TTS API directly (free, no API key needed for basic usage)
-    // This is a simple HTTP request to Google's TTS service
-    const encodedText = encodeURIComponent(text);
-    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=tw-ob`;
+    // Try multiple TTS services in order
+    const ttsServices = [
+      // Service 1: Google TTS with tw-ob client
+      async () => {
+        const encodedText = encodeURIComponent(text);
+        const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=tw-ob`;
+        return await axios.get(ttsUrl, {
+          responseType: 'arraybuffer',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://translate.google.com/'
+          },
+          timeout: 10000
+        });
+      },
+      // Service 2: Google TTS with gtx client
+      async () => {
+        const encodedText = encodeURIComponent(text);
+        const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=gtx`;
+        return await axios.get(ttsUrl, {
+          responseType: 'arraybuffer',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+          timeout: 10000
+        });
+      }
+    ];
 
-    try {
-      const response = await axios.get(ttsUrl, {
-        responseType: 'arraybuffer',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    let lastError = null;
+    
+    // Try each service in order
+    for (let i = 0; i < ttsServices.length; i++) {
+      try {
+        console.log(`Trying TTS service ${i + 1}...`);
+        const response = await ttsServices[i]();
+        
+        // Check if we got valid audio data
+        if (response.data && response.data.length > 0) {
+          console.log(`TTS service ${i + 1} succeeded, audio length: ${response.data.length}`);
+          res.setHeader('Content-Type', 'audio/mpeg');
+          res.setHeader('Cache-Control', 'no-cache');
+          return res.send(Buffer.from(response.data));
         }
-      });
-
-      // Send audio file
-      res.setHeader('Content-Type', 'audio/mpeg');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.send(Buffer.from(response.data));
-    } catch (ttsError) {
-      console.error('TTS API error:', ttsError.message);
-      res.status(500).json({
-        error: 'TTS generation failed',
-        details: 'Unable to generate speech. Please try again.'
-      });
+      } catch (error) {
+        console.error(`TTS service ${i + 1} failed:`, error.message);
+        lastError = error;
+        // Continue to next service
+      }
     }
+
+    // All services failed
+    console.error('All TTS services failed. Last error:', lastError?.message);
+    res.status(500).json({
+      error: 'TTS generation failed',
+      details: 'All TTS services are unavailable. Please use browser fallback.',
+      fallback: true
+    });
+
   } catch (error) {
     console.error('TTS endpoint error:', error);
     res.status(500).json({
       error: 'TTS failed',
-      details: error.message
+      details: error.message,
+      fallback: true
     });
   }
 });
