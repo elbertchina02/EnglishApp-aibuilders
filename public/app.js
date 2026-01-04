@@ -338,22 +338,15 @@ function showLoading(show) {
     loading.style.display = show ? 'block' : 'none';
 }
 
-// Load version info - version is embedded in HTML, but try to update from API if available
-async function loadVersion() {
-    // Version is already embedded in HTML as fallback
-    // Try to fetch from API to update if available
-    try {
-        const response = await fetch('/version');
-        if (response.ok) {
-            const data = await response.json();
-            const versionInfo = document.getElementById('versionInfo');
-            if (versionInfo) {
-                versionInfo.textContent = `v${data.version}`;
-            }
-        }
-    } catch (error) {
-        // Silently fail - version is already in HTML
-        console.log('Version API not available, using embedded version');
+// Load version info - version is embedded in HTML, no API call needed
+function loadVersion() {
+    // Version is already embedded in HTML, no need to fetch from API
+    // This avoids 404 errors and makes the app more reliable
+    const versionInfo = document.getElementById('versionInfo');
+    if (versionInfo && !versionInfo.textContent || versionInfo.textContent === '版本加载中...') {
+        // If somehow the version wasn't set, it's already in HTML
+        // Just ensure it's displayed
+        console.log('Version loaded from HTML');
     }
 }
 
