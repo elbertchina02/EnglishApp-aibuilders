@@ -25,25 +25,29 @@ if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     alert('您的浏览器不支持录音功能，请使用Chrome、Firefox或Edge浏览器。');
 }
 
-// Unlock audio for iOS and WeChat
+// Unlock audio for iOS and WeChat (for Web Speech Synthesis)
 function unlockAudio() {
-    console.log('Attempting to unlock audio...');
+    console.log('Attempting to unlock audio for speech synthesis...');
     
     // Function to unlock
     const unlock = () => {
         if (audioUnlocked) return;
         
         console.log('Audio unlock triggered');
+        audioUnlocked = true;
         
-        // Try to play a silent sound
-        if (ttsAudioElement) {
-            ttsAudioElement.src = 'data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
-            ttsAudioElement.play().then(() => {
-                console.log('Audio unlocked successfully');
-                audioUnlocked = true;
-            }).catch(e => {
-                console.log('Audio unlock attempt:', e.message);
-            });
+        // Try to initialize speechSynthesis
+        if ('speechSynthesis' in window) {
+            // Load voices (this helps initialize the speech synthesis engine)
+            const voices = window.speechSynthesis.getVoices();
+            console.log('Speech synthesis voices loaded:', voices.length);
+            
+            // Speak a very short silent phrase to unlock
+            const utterance = new SpeechSynthesisUtterance('');
+            utterance.volume = 0;
+            utterance.rate = 10;
+            window.speechSynthesis.speak(utterance);
+            console.log('Speech synthesis unlocked');
         }
     };
     
@@ -61,6 +65,14 @@ function unlockAudio() {
             console.log('WeixinJSBridge ready');
             WeixinJSBridge.invoke('getNetworkType', {}, unlock);
         }, false);
+    }
+    
+    // Also try to load voices when they change
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = () => {
+            const voices = window.speechSynthesis.getVoices();
+            console.log('Voices changed, total voices:', voices.length);
+        };
     }
 }
 
@@ -224,134 +236,73 @@ async function getChatResponse(message) {
     return await response.json();
 }
 
-// Speak text using backend TTS API with <audio> element (best mobile compatibility)
+// Speak text using Web Speech Synthesis API (works in all browsers including WeChat)
 async function speakText(text) {
-    return new Promise(async (resolve) => {
-        try {
-            console.log('Attempting backend TTS...');
-            const response = await fetch('/api/tts', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ text: text })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                console.error('Backend TTS failed:', response.status, errorData);
-                
-                // Fallback to Web Speech Synthesis
-                if (errorData.fallback || response.status >= 500) {
-                    console.log('Using Web Speech Synthesis fallback...');
-                    useFallbackTTS(text, resolve);
-                    return;
-                }
-            }
-
-            // Get audio blob
-            const audioBlob = await response.blob();
-            
-            // Check if we got valid audio data
-            if (audioBlob.size === 0) {
-                console.error('Received empty audio blob, using fallback');
-                useFallbackTTS(text, resolve);
-                return;
-            }
-
-            console.log('Backend TTS succeeded, audio size:', audioBlob.size);
-            
-            // Use the dedicated audio element
-            const audioUrl = URL.createObjectURL(audioBlob);
-            
-            if (!ttsAudioElement) {
-                ttsAudioElement = document.getElementById('ttsAudio');
-            }
-            
-            // Set up event listeners
-            const onEnded = () => {
-                console.log('Audio playback completed');
-                URL.revokeObjectURL(audioUrl);
-                ttsAudioElement.removeEventListener('ended', onEnded);
-                ttsAudioElement.removeEventListener('error', onError);
-                resolve();
-            };
-            
-            const onError = (e) => {
-                console.error('Audio playback error:', e);
-                URL.revokeObjectURL(audioUrl);
-                ttsAudioElement.removeEventListener('ended', onEnded);
-                ttsAudioElement.removeEventListener('error', onError);
-                
-                // Try fallback
-                console.log('Audio playback failed, trying fallback...');
-                useFallbackTTS(text, resolve);
-            };
-            
-            ttsAudioElement.addEventListener('ended', onEnded);
-            ttsAudioElement.addEventListener('error', onError);
-            
-            // Set source and play
-            ttsAudioElement.src = audioUrl;
-            ttsAudioElement.load();
-            
-            try {
-                await ttsAudioElement.play();
-                console.log('Audio play started successfully');
-            } catch (playError) {
-                console.error('Audio play() failed:', playError);
-                URL.revokeObjectURL(audioUrl);
-                ttsAudioElement.removeEventListener('ended', onEnded);
-                ttsAudioElement.removeEventListener('error', onError);
-                
-                console.log('Play failed, trying fallback...');
-                useFallbackTTS(text, resolve);
-            }
-
-        } catch (error) {
-            console.error('TTS error:', error);
-            console.log('Exception caught, using fallback...');
-            useFallbackTTS(text, resolve);
+    return new Promise((resolve) => {
+        if (!('speechSynthesis' in window)) {
+            console.error('Web Speech Synthesis not supported');
+            resolve();
+            return;
         }
-    });
-}
 
-// Fallback TTS using Web Speech Synthesis API
-function useFallbackTTS(text, resolve) {
-    if ('speechSynthesis' in window) {
         console.log('Starting Web Speech Synthesis...');
         
         // Cancel any ongoing speech
         window.speechSynthesis.cancel();
         
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'en-US';
-        utterance.rate = 0.9;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-        
-        utterance.onstart = () => {
-            console.log('Web Speech Synthesis started');
-        };
-        
-        utterance.onend = () => {
-            console.log('Web Speech Synthesis completed');
-            resolve();
-        };
-        
-        utterance.onerror = (e) => {
-            console.error('Web Speech Synthesis error:', e);
-            resolve();
-        };
-        
-        // Small delay to ensure it works on mobile
+        // Wait a bit for cancellation to complete
         setTimeout(() => {
-            window.speechSynthesis.speak(utterance);
-        }, 100);
-    } else {
-        console.error('No TTS available');
-        resolve();
-    }
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US';
+            utterance.rate = 0.9;
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            
+            let hasResolved = false;
+            
+            utterance.onstart = () => {
+                console.log('Speech started');
+            };
+            
+            utterance.onend = () => {
+                console.log('Speech completed');
+                if (!hasResolved) {
+                    hasResolved = true;
+                    resolve();
+                }
+            };
+            
+            utterance.onerror = (e) => {
+                console.error('Speech error:', e);
+                if (!hasResolved) {
+                    hasResolved = true;
+                    resolve();
+                }
+            };
+            
+            // Timeout safety - ensure we don't hang forever
+            const timeoutDuration = Math.max(text.length * 100, 5000); // At least 5 seconds
+            setTimeout(() => {
+                if (!hasResolved) {
+                    console.log('Speech timeout, forcing completion');
+                    hasResolved = true;
+                    window.speechSynthesis.cancel();
+                    resolve();
+                }
+            }, timeoutDuration);
+            
+            try {
+                window.speechSynthesis.speak(utterance);
+                console.log('Speech queued successfully');
+            } catch (error) {
+                console.error('Error queuing speech:', error);
+                if (!hasResolved) {
+                    hasResolved = true;
+                    resolve();
+                }
+            }
+        }, 250); // Longer delay for mobile/WeChat compatibility
+    });
 }
 
 // Add message to conversation display
