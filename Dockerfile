@@ -2,6 +2,14 @@ FROM node:18-slim
 
 WORKDIR /app
 
+# Install system dependencies for gtts (Google Text-to-Speech)
+# gtts requires Python and some system libraries
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy package files
 COPY package*.json ./
 
