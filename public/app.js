@@ -338,30 +338,22 @@ function showLoading(show) {
     loading.style.display = show ? 'block' : 'none';
 }
 
-// Load version info - try /version first, fallback to /api/version
+// Load version info - version is embedded in HTML, but try to update from API if available
 async function loadVersion() {
+    // Version is already embedded in HTML as fallback
+    // Try to fetch from API to update if available
     try {
-        // Try /version first (simpler path)
-        let response = await fetch('/version');
-        if (!response.ok) {
-            // Fallback to /api/version
-            response = await fetch('/api/version');
-        }
+        const response = await fetch('/version');
         if (response.ok) {
             const data = await response.json();
             const versionInfo = document.getElementById('versionInfo');
             if (versionInfo) {
                 versionInfo.textContent = `v${data.version}`;
             }
-        } else {
-            throw new Error('Version endpoint not available');
         }
     } catch (error) {
-        console.error('Error loading version:', error);
-        const versionInfo = document.getElementById('versionInfo');
-        if (versionInfo) {
-            versionInfo.textContent = 'v?';
-        }
+        // Silently fail - version is already in HTML
+        console.log('Version API not available, using embedded version');
     }
 }
 
