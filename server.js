@@ -107,16 +107,41 @@ app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
 // Chat completion endpoint
 app.post('/api/chat', async (req, res) => {
   try {
-    const { messages } = req.body;
+    const { message, history } = req.body;
 
-    if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ error: 'Messages array is required' });
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
     }
 
     const token = process.env.AI_BUILDER_TOKEN;
     if (!token) {
       return res.status(500).json({ error: 'AI_BUILDER_TOKEN not configured' });
     }
+
+    // Build messages array - ensure we have a proper array
+    let messages = [];
+    
+    // Add system message if not already in history
+    const hasSystemMessage = Array.isArray(history) && history.some(msg => msg.role === 'system');
+    if (!hasSystemMessage) {
+      messages.push({
+        role: 'system',
+        content: 'You are a friendly English teacher helping middle school students practice English speaking and listening. Keep your responses encouraging, clear, and appropriate for middle school level. Use simple vocabulary and short sentences. Always respond in English.'
+      });
+    }
+    
+    // Add history if provided
+    if (Array.isArray(history) && history.length > 0) {
+      messages = messages.concat(history.filter(msg => msg.role !== 'system'));
+    }
+    
+    // Add current message
+    messages.push({
+      role: 'user',
+      content: message
+    });
+
+    console.log('Sending chat request with', messages.length, 'messages');
 
     // Call AI Builders chat completion API with deepseek model
     const response = await axios.post(
