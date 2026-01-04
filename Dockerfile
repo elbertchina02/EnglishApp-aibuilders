@@ -2,14 +2,6 @@ FROM node:18-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    python3 \
-    python3-pip \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
 # Copy package files first for better caching
 COPY package*.json ./
 
@@ -18,9 +10,6 @@ RUN npm ci --only=production
 
 # Copy application code
 COPY . .
-
-# Create temp directory for TTS files
-RUN mkdir -p temp && chmod 777 temp
 
 # Expose port (PORT will be set at runtime by Koyeb)
 EXPOSE 8000

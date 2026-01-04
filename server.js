@@ -3,9 +3,8 @@ const cors = require('cors');
 const multer = require('multer');
 const axios = require('axios');
 const path = require('path');
-const gtts = require('gtts');
+const https = require('https');
 const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
 const app = express();
@@ -146,7 +145,7 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// Text-to-Speech endpoint
+// Text-to-Speech endpoint using Google TTS API (no external dependencies)
 app.post('/api/tts', async (req, res) => {
   try {
     const { text } = req.body;
@@ -160,49 +159,30 @@ app.post('/api/tts', async (req, res) => {
       return res.status(400).json({ error: 'Text too long (max 1000 characters)' });
     }
 
-    // Generate unique filename
-    const filename = `${uuidv4()}.mp3`;
-    const filepath = path.join(__dirname, 'temp', filename);
+    // Use Google TTS API directly (free, no API key needed for basic usage)
+    // This is a simple HTTP request to Google's TTS service
+    const encodedText = encodeURIComponent(text);
+    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=tw-ob`;
 
-    // Ensure temp directory exists
-    const tempDir = path.join(__dirname, 'temp');
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
-
-    // Generate speech using Google TTS
-    return new Promise((resolve, reject) => {
-      const tts = new gtts(text, 'en');
-      
-      tts.save(filepath, (err) => {
-        if (err) {
-          console.error('TTS error:', err);
-          res.status(500).json({ error: 'TTS generation failed', details: err.message });
-          return resolve(); // Resolve to end the promise chain
+    try {
+      const response = await axios.get(ttsUrl, {
+        responseType: 'arraybuffer',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
-
-        // Read the generated audio file
-        fs.readFile(filepath, (err, data) => {
-          // Clean up the file
-          fs.unlink(filepath, (unlinkErr) => {
-            if (unlinkErr) console.error('Error deleting temp file:', unlinkErr);
-          });
-
-          if (err) {
-            console.error('Error reading audio file:', err);
-            res.status(500).json({ error: 'Failed to read audio file' });
-            return resolve();
-          }
-
-          // Send audio file
-          res.setHeader('Content-Type', 'audio/mpeg');
-          res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-          res.setHeader('Cache-Control', 'no-cache');
-          res.send(data);
-          resolve();
-        });
       });
-    });
+
+      // Send audio file
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.send(Buffer.from(response.data));
+    } catch (ttsError) {
+      console.error('TTS API error:', ttsError.message);
+      res.status(500).json({
+        error: 'TTS generation failed',
+        details: 'Unable to generate speech. Please try again.'
+      });
+    }
   } catch (error) {
     console.error('TTS endpoint error:', error);
     res.status(500).json({
