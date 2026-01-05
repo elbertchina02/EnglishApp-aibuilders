@@ -20,6 +20,11 @@ let isRecording = false;
 let audioUnlocked = false;
 let ttsAudioElement = null;
 
+// Check if WeChat (will use the function from wechatTts.js if available)
+function isWeChat() {
+    return /MicroMessenger/i.test(navigator.userAgent);
+}
+
 // Check if browser supports MediaRecorder
 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     alert('您的浏览器不支持录音功能，请使用Chrome、Firefox或Edge浏览器。');
@@ -257,11 +262,6 @@ async function getChatResponse(message) {
     }
     
     return await response.json();
-}
-
-// Check if running in WeChat
-function isWeChat() {
-    return /MicroMessenger/i.test(navigator.userAgent);
 }
 
 // Speak text - use backend TTS for better mobile/WeChat compatibility
