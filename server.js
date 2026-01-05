@@ -196,17 +196,30 @@ app.post('/api/tts', async (req, res) => {
       return res.status(400).json({ error: 'Text is empty after cleaning' });
     }
 
-    // Try multiple TTS services (some hosts block Google; StreamElements often works better)
+    // Try multiple TTS services (use truly free APIs that work from servers)
     const ttsServices = [
-      // Service 1: StreamElements (no key) - often works from servers
+      // Service 1: TikTok TTS (free, no auth needed)
       async () => {
-        const encodedText = encodeURIComponent(limitedText);
-        const voice = 'Brian'; // English voice
-        const ttsUrl = `https://api.streamelements.com/kappa/v2/speech?voice=${voice}&text=${encodedText}`;
-        return await axios.get(ttsUrl, {
+        const ttsUrl = 'https://tiktok-tts.weilnet.workers.dev/api/generation';
+        const response = await axios.post(ttsUrl, {
+          text: limitedText,
+          voice: 'en_us_001' // English US voice
+        }, {
           responseType: 'arraybuffer',
-          timeout: 15000
+          timeout: 15000,
+          headers: {
+            'Content-Type': 'application/json'
+          }
         });
+        // TikTok returns JSON with data field containing base64 audio
+        if (response.data) {
+          const jsonStr = Buffer.from(response.data).toString('utf8');
+          const json = JSON.parse(jsonStr);
+          if (json.data) {
+            return { data: Buffer.from(json.data, 'base64') };
+          }
+        }
+        throw new Error('Invalid TikTok TTS response');
       },
       // Service 2: Google TTS with tw-ob client
       async () => {
