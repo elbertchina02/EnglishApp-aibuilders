@@ -20,10 +20,10 @@ let isRecording = false;
 let audioUnlocked = false;
 let ttsAudioElement = null;
 
-// Check if WeChat (will use the function from wechatTts.js if available)
-function isWeChat() {
+// Check if WeChat - single definition for the entire app
+window.isWeChat = window.isWeChat || function() {
     return /MicroMessenger/i.test(navigator.userAgent);
-}
+};
 
 // Check if browser supports MediaRecorder
 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -87,7 +87,7 @@ async function init() {
         // Show browser info
         const browserInfo = document.getElementById('browserInfo');
         if (browserInfo) {
-            if (isWeChat()) {
+            if (window.isWeChat()) {
                 browserInfo.textContent = '微信浏览器 - 使用后端 TTS';
             } else {
                 browserInfo.textContent = '支持完整语音功能';

@@ -5,17 +5,16 @@ let currentAudio = null;
 let isSpeaking = false;
 let audioContext = null;
 
+// Use window scope to avoid conflicts with app.js
+window.wechatTTS = window.wechatTTS || {};
+
 const isIOS = () => {
     return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
         (navigator.userAgent.includes('Mac') && 'ontouchend' in document);
 };
 
-const isWeChat = () => {
-    return /MicroMessenger/i.test(navigator.userAgent);
-};
-
 const isIOSWeChat = () => {
-    return isIOS() && isWeChat();
+    return isIOS() && window.isWeChat();
 };
 
 // Get or create AudioContext
