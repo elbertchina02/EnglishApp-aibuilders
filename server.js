@@ -196,9 +196,19 @@ app.post('/api/tts', async (req, res) => {
       return res.status(400).json({ error: 'Text is empty after cleaning' });
     }
 
-    // Try multiple TTS services
+    // Try multiple TTS services (some hosts block Google; StreamElements often works better)
     const ttsServices = [
-      // Service 1: Google TTS with tw-ob client
+      // Service 1: StreamElements (no key) - often works from servers
+      async () => {
+        const encodedText = encodeURIComponent(limitedText);
+        const voice = 'Brian'; // English voice
+        const ttsUrl = `https://api.streamelements.com/kappa/v2/speech?voice=${voice}&text=${encodedText}`;
+        return await axios.get(ttsUrl, {
+          responseType: 'arraybuffer',
+          timeout: 15000
+        });
+      },
+      // Service 2: Google TTS with tw-ob client
       async () => {
         const encodedText = encodeURIComponent(limitedText);
         const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=tw-ob`;
@@ -211,7 +221,7 @@ app.post('/api/tts', async (req, res) => {
           timeout: 10000
         });
       },
-      // Service 2: Google TTS with gtx client
+      // Service 3: Google TTS with gtx client
       async () => {
         const encodedText = encodeURIComponent(limitedText);
         const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=gtx`;

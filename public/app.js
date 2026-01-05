@@ -486,6 +486,16 @@ function showLoading(show) {
 
 // Event listeners
 recordBtn.addEventListener('click', startRecording);
+// WeChat/iOS: make sure AudioContext init happens on a *touch* gesture (stricter than click)
+recordBtn.addEventListener('touchstart', () => {
+    if (typeof window.initAudioForMobile === 'function') {
+        try {
+            window.initAudioForMobile();
+        } catch (e) {
+            console.log('touchstart audio init warning:', e);
+        }
+    }
+}, { passive: true });
 stopBtn.addEventListener('click', stopRecording);
 
 // Initialize when page loads

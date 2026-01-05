@@ -104,7 +104,9 @@ const playAudioWithElement = async (base64Audio) => {
     const audioUrl = URL.createObjectURL(blob);
     
     return new Promise((resolve, reject) => {
-        currentAudio = new Audio();
+        // Prefer re-using the existing <audio id="ttsAudio"> element (more compatible in WeChat)
+        const existing = document.getElementById('ttsAudio');
+        currentAudio = existing || new Audio();
         
         // Set attributes for mobile compatibility
         currentAudio.setAttribute('playsinline', 'true');
