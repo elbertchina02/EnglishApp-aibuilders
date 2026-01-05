@@ -79,6 +79,16 @@ function unlockAudio() {
 // Initialize
 async function init() {
     try {
+        // Show browser info
+        const browserInfo = document.getElementById('browserInfo');
+        if (browserInfo) {
+            if (isWeChat()) {
+                browserInfo.textContent = '微信浏览器 - TTS 功能受限，将显示文本';
+            } else {
+                browserInfo.textContent = '支持完整语音功能';
+            }
+        }
+        
         // Get the audio element
         ttsAudioElement = document.getElementById('ttsAudio');
         if (!ttsAudioElement) {
@@ -244,12 +254,28 @@ async function getChatResponse(message) {
     return await response.json();
 }
 
-// Speak text using Web Speech Synthesis API (works in all browsers including WeChat)
+// Check if running in WeChat
+function isWeChat() {
+    return /MicroMessenger/i.test(navigator.userAgent);
+}
+
+// Speak text using Web Speech Synthesis API (works in most browsers)
 async function speakText(text) {
     return new Promise((resolve) => {
+        // Check if in WeChat
+        if (isWeChat()) {
+            console.log('WeChat browser detected - Web Speech Synthesis may not work');
+            // Display the text for user to read
+            showAITextPopup(text);
+            // Auto close after reading time
+            setTimeout(resolve, Math.max(text.length * 50, 3000));
+            return;
+        }
+        
         if (!('speechSynthesis' in window)) {
             console.error('Web Speech Synthesis not supported');
-            resolve();
+            showAITextPopup(text);
+            setTimeout(resolve, Math.max(text.length * 50, 3000));
             return;
         }
 
@@ -284,7 +310,9 @@ async function speakText(text) {
                 console.error('Speech error:', e);
                 if (!hasResolved) {
                     hasResolved = true;
-                    resolve();
+                    // Show text as fallback
+                    showAITextPopup(text);
+                    setTimeout(resolve, Math.max(text.length * 50, 3000));
                 }
             };
             
@@ -306,11 +334,58 @@ async function speakText(text) {
                 console.error('Error queuing speech:', error);
                 if (!hasResolved) {
                     hasResolved = true;
-                    resolve();
+                    showAITextPopup(text);
+                    setTimeout(resolve, Math.max(text.length * 50, 3000));
                 }
             }
         }, 250); // Longer delay for mobile/WeChat compatibility
     });
+}
+
+// Show AI text in a popup (for WeChat where TTS doesn't work)
+function showAITextPopup(text) {
+    // Remove existing popup if any
+    const existingPopup = document.getElementById('ttsPopup');
+    if (existingPopup) {
+        existingPopup.remove();
+    }
+    
+    // Create popup
+    const popup = document.createElement('div');
+    popup.id = 'ttsPopup';
+    popup.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 20px 30px;
+        border-radius: 10px;
+        max-width: 80%;
+        z-index: 10000;
+        font-size: 18px;
+        line-height: 1.6;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    `;
+    popup.innerHTML = `
+        <div style="margin-bottom: 10px; font-weight: bold; color: #4CAF50;">🤖 AI 回复：</div>
+        <div>${text}</div>
+        <div style="margin-top: 10px; font-size: 12px; color: #888; text-align: center;">
+            (微信浏览器暂不支持语音播放，请阅读文本)
+        </div>
+    `;
+    
+    document.body.appendChild(popup);
+    
+    // Auto remove after reading time
+    setTimeout(() => {
+        popup.style.transition = 'opacity 0.5s';
+        popup.style.opacity = '0';
+        setTimeout(() => popup.remove(), 500);
+    }, Math.max(text.length * 80, 4000));
+    
+    console.log('Showing AI text popup for WeChat');
 }
 
 // Add message to conversation display
