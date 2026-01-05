@@ -245,7 +245,7 @@ app.post('/api/tts', async (req, res) => {
         
         // Check if we got valid audio data
         if (response.data && response.data.length > 0) {
-          console.log(`TTS service ${i + 1} succeeded, audio length: ${response.data.length}`);
+          console.log(`TTS service ${i + 1} succeeded, audio length: ${response.data.length}, content-type: ${response.headers['content-type']}`);
           
           // Convert to base64 for better mobile/WeChat compatibility
           const base64Audio = Buffer.from(response.data).toString('base64');
@@ -255,19 +255,30 @@ app.post('/api/tts', async (req, res) => {
             audioContent: base64Audio,
             format: 'mp3'
           });
+        } else {
+          console.error(`TTS service ${i + 1} returned empty data`);
         }
       } catch (error) {
-        console.error(`TTS service ${i + 1} failed:`, error.message);
+        console.error(`TTS service ${i + 1} failed:`, {
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data?.toString?.()?.substring(0, 200)
+        });
         lastError = error;
         // Continue to next service
       }
     }
 
     // All services failed
-    console.error('All TTS services failed. Last error:', lastError?.message);
+    console.error('All TTS services failed. Last error:', {
+      message: lastError?.message,
+      status: lastError?.response?.status,
+      statusText: lastError?.response?.statusText
+    });
     res.status(500).json({
       error: 'TTS generation failed',
-      details: 'All TTS services are unavailable.',
+      details: lastError?.message || 'All TTS services are unavailable.',
       fallback: true
     });
 
