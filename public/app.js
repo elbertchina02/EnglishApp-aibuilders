@@ -94,10 +94,8 @@ async function init() {
             }
         }
         
-        // Initialize audio for mobile/WeChat
-        if (typeof window.initAudioForMobile === 'function') {
-            await window.initAudioForMobile();
-        }
+        // Note: Don't initialize AudioContext here - wait for user gesture
+        console.log('App initialized, AudioContext will be created on first user interaction');
         
         // Get the audio element
         ttsAudioElement = document.getElementById('ttsAudio');
@@ -142,10 +140,19 @@ async function init() {
 }
 
 // Start recording
-function startRecording() {
+async function startRecording() {
     if (!mediaRecorder) {
         alert('录音功能未初始化，请刷新页面重试。');
         return;
+    }
+    
+    // Initialize audio for mobile on first interaction
+    if (typeof window.initAudioForMobile === 'function') {
+        try {
+            await window.initAudioForMobile();
+        } catch (e) {
+            console.log('Audio initialization warning:', e);
+        }
     }
     
     audioChunks = [];

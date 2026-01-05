@@ -17,19 +17,38 @@ const isIOSWeChat = () => {
     return isIOS() && window.isWeChat();
 };
 
-// Get or create AudioContext
+// Get or create AudioContext (lazy initialization)
 const getAudioContext = () => {
     if (!audioContext) {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            console.log('AudioContext created, state:', audioContext.state);
+        } catch (e) {
+            console.error('Failed to create AudioContext:', e);
+        }
     }
     return audioContext;
 };
 
 // Resume AudioContext if suspended
 const resumeAudioContext = async () => {
-    const ctx = getAudioContext();
-    if (ctx.state === 'suspended') {
-        await ctx.resume();
+    try {
+        const ctx = getAudioContext();
+        if (!ctx) {
+            console.log('No AudioContext available');
+            return;
+        }
+        
+        console.log('AudioContext state before resume:', ctx.state);
+        
+        if (ctx.state === 'suspended') {
+            await ctx.resume();
+            console.log('AudioContext resumed, new state:', ctx.state);
+        } else if (ctx.state === 'running') {
+            console.log('AudioContext already running');
+        }
+    } catch (e) {
+        console.error('Failed to resume AudioContext:', e);
     }
 };
 
@@ -236,7 +255,18 @@ const stopTTS = () => {
 
 // Initialize audio on first user interaction
 window.initAudioForMobile = async () => {
+    if (window.__audio_initialized) {
+        console.log('Audio already initialized');
+        return;
+    }
+    
     try {
+        console.log('Initializing audio for mobile...');
+        
+        // Create AudioContext on user gesture
+        getAudioContext();
+        
+        // Try to resume it
         await resumeAudioContext();
         
         // WeChat iOS setup
@@ -244,10 +274,13 @@ window.initAudioForMobile = async () => {
             if (!window.__wechat_audio_init) {
                 window.__wechat_audio_init = true;
                 
-                const kick = () => {
-                    unlockIOSWeChatAudio().then(() => {
+                const kick = async () => {
+                    try {
+                        await unlockIOSWeChatAudio();
                         console.log('WeChat iOS audio unlock attempted');
-                    });
+                    } catch (e) {
+                        console.log('WeChat audio unlock error:', e);
+                    }
                 };
                 
                 document.addEventListener('touchstart', kick, { once: true, passive: true });
@@ -256,11 +289,14 @@ window.initAudioForMobile = async () => {
                 document.addEventListener('WeixinJSBridgeReady', () => {
                     unlockIOSWeChatAudio().then(() => {
                         console.log('WeixinJSBridgeReady audio unlock attempted');
+                    }).catch(e => {
+                        console.log('WeixinJSBridge unlock error:', e);
                     });
                 }, false);
             }
         }
         
+        window.__audio_initialized = true;
         console.log('Audio context initialized for mobile');
     } catch (e) {
         console.log('Audio context init failed:', e);
