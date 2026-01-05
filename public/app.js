@@ -344,48 +344,103 @@ async function speakText(text) {
 
 // Show AI text in a popup (for WeChat where TTS doesn't work)
 function showAITextPopup(text) {
+    console.log('showAITextPopup called with text:', text);
+    
     // Remove existing popup if any
     const existingPopup = document.getElementById('ttsPopup');
     if (existingPopup) {
+        console.log('Removing existing popup');
         existingPopup.remove();
     }
+    
+    // Create popup overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'ttsOverlay';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    `;
     
     // Create popup
     const popup = document.createElement('div');
     popup.id = 'ttsPopup';
     popup.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(0, 0, 0, 0.9);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        padding: 20px 30px;
-        border-radius: 10px;
-        max-width: 80%;
+        padding: 25px 30px;
+        border-radius: 15px;
+        max-width: 85%;
+        min-width: 250px;
         z-index: 10000;
         font-size: 18px;
-        line-height: 1.6;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        line-height: 1.8;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        animation: popupSlideIn 0.3s ease-out;
     `;
+    
     popup.innerHTML = `
-        <div style="margin-bottom: 10px; font-weight: bold; color: #4CAF50;">🤖 AI 回复：</div>
-        <div>${text}</div>
-        <div style="margin-top: 10px; font-size: 12px; color: #888; text-align: center;">
-            (微信浏览器暂不支持语音播放，请阅读文本)
+        <style>
+            @keyframes popupSlideIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(-20px) scale(0.9);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0) scale(1);
+                }
+            }
+        </style>
+        <div style="margin-bottom: 15px; font-weight: bold; font-size: 20px; text-align: center;">
+            🤖 AI 回复
         </div>
+        <div style="background: rgba(255, 255, 255, 0.2); padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+            ${text}
+        </div>
+        <div style="font-size: 13px; color: rgba(255, 255, 255, 0.8); text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.3); padding-top: 10px;">
+            💡 微信浏览器不支持语音播放<br>请阅读上方文本内容
+        </div>
+        <button onclick="this.parentElement.parentElement.remove()" style="
+            width: 100%;
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.3);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        ">关闭</button>
     `;
     
-    document.body.appendChild(popup);
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
     
-    // Auto remove after reading time
+    console.log('Popup displayed successfully');
+    
+    // Auto remove after reading time (but keep it longer for user to read)
+    const displayTime = Math.max(text.length * 100, 8000); // At least 8 seconds
     setTimeout(() => {
-        popup.style.transition = 'opacity 0.5s';
-        popup.style.opacity = '0';
-        setTimeout(() => popup.remove(), 500);
-    }, Math.max(text.length * 80, 4000));
-    
-    console.log('Showing AI text popup for WeChat');
+        if (overlay.parentElement) {
+            overlay.style.transition = 'opacity 0.5s';
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                if (overlay.parentElement) {
+                    overlay.remove();
+                    console.log('Popup auto-removed');
+                }
+            }, 500);
+        }
+    }, displayTime);
 }
 
 // Add message to conversation display
