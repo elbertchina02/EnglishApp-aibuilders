@@ -170,7 +170,7 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// Text-to-Speech endpoint using Google TTS API (no external dependencies)
+// Text-to-Speech endpoint - Returns base64 audio for WeChat compatibility
 app.post('/api/tts', async (req, res) => {
   try {
     const { text } = req.body;
@@ -179,16 +179,28 @@ app.post('/api/tts', async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    // Limit text length to prevent abuse
-    if (text.length > 1000) {
-      return res.status(400).json({ error: 'Text too long (max 1000 characters)' });
+    // Clean the text
+    const cleanText = text
+      .replace(/\*\*/g, '')
+      .replace(/\*/g, '')
+      .replace(/`/g, '')
+      .replace(/#{1,6}\s/g, '')
+      .replace(/\n+/g, '. ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Limit text length (300 chars is safe for most TTS APIs)
+    const limitedText = cleanText.substring(0, 300);
+
+    if (!limitedText) {
+      return res.status(400).json({ error: 'Text is empty after cleaning' });
     }
 
-    // Try multiple TTS services in order
+    // Try multiple TTS services
     const ttsServices = [
       // Service 1: Google TTS with tw-ob client
       async () => {
-        const encodedText = encodeURIComponent(text);
+        const encodedText = encodeURIComponent(limitedText);
         const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=tw-ob`;
         return await axios.get(ttsUrl, {
           responseType: 'arraybuffer',
@@ -201,7 +213,7 @@ app.post('/api/tts', async (req, res) => {
       },
       // Service 2: Google TTS with gtx client
       async () => {
-        const encodedText = encodeURIComponent(text);
+        const encodedText = encodeURIComponent(limitedText);
         const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=gtx`;
         return await axios.get(ttsUrl, {
           responseType: 'arraybuffer',
@@ -224,9 +236,15 @@ app.post('/api/tts', async (req, res) => {
         // Check if we got valid audio data
         if (response.data && response.data.length > 0) {
           console.log(`TTS service ${i + 1} succeeded, audio length: ${response.data.length}`);
-          res.setHeader('Content-Type', 'audio/mpeg');
-          res.setHeader('Cache-Control', 'no-cache');
-          return res.send(Buffer.from(response.data));
+          
+          // Convert to base64 for better mobile/WeChat compatibility
+          const base64Audio = Buffer.from(response.data).toString('base64');
+          
+          return res.json({
+            success: true,
+            audioContent: base64Audio,
+            format: 'mp3'
+          });
         }
       } catch (error) {
         console.error(`TTS service ${i + 1} failed:`, error.message);
@@ -239,7 +257,7 @@ app.post('/api/tts', async (req, res) => {
     console.error('All TTS services failed. Last error:', lastError?.message);
     res.status(500).json({
       error: 'TTS generation failed',
-      details: 'All TTS services are unavailable. Please use browser fallback.',
+      details: 'All TTS services are unavailable.',
       fallback: true
     });
 

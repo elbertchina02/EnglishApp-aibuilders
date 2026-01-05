@@ -83,10 +83,15 @@ async function init() {
         const browserInfo = document.getElementById('browserInfo');
         if (browserInfo) {
             if (isWeChat()) {
-                browserInfo.textContent = '微信浏览器 - TTS 功能受限，将显示文本';
+                browserInfo.textContent = '微信浏览器 - 使用后端 TTS';
             } else {
                 browserInfo.textContent = '支持完整语音功能';
             }
+        }
+        
+        // Initialize audio for mobile/WeChat
+        if (typeof window.initAudioForMobile === 'function') {
+            await window.initAudioForMobile();
         }
         
         // Get the audio element
@@ -259,27 +264,30 @@ function isWeChat() {
     return /MicroMessenger/i.test(navigator.userAgent);
 }
 
-// Speak text using Web Speech Synthesis API (works in most browsers)
+// Speak text - use backend TTS for better mobile/WeChat compatibility
 async function speakText(text) {
-    return new Promise((resolve) => {
-        // Check if in WeChat
-        if (isWeChat()) {
-            console.log('WeChat browser detected - Web Speech Synthesis may not work');
-            // Display the text for user to read
-            showAITextPopup(text);
-            // Auto close after reading time
-            setTimeout(resolve, Math.max(text.length * 50, 3000));
+    // Try backend TTS first (works in WeChat!)
+    if (typeof window.speakWithBackendTTS === 'function') {
+        try {
+            console.log('Using backend TTS...');
+            await window.speakWithBackendTTS(text);
+            console.log('Backend TTS completed successfully');
             return;
+        } catch (error) {
+            console.error('Backend TTS failed:', error);
+            // Fall through to Web Speech Synthesis
         }
-        
+    }
+    
+    // Fallback to Web Speech Synthesis
+    return new Promise((resolve) => {
         if (!('speechSynthesis' in window)) {
             console.error('Web Speech Synthesis not supported');
-            showAITextPopup(text);
-            setTimeout(resolve, Math.max(text.length * 50, 3000));
+            resolve();
             return;
         }
 
-        console.log('Starting Web Speech Synthesis...');
+        console.log('Using Web Speech Synthesis fallback...');
         
         // Cancel any ongoing speech
         window.speechSynthesis.cancel();
@@ -295,11 +303,11 @@ async function speakText(text) {
             let hasResolved = false;
             
             utterance.onstart = () => {
-                console.log('Speech started');
+                console.log('Web Speech started');
             };
             
             utterance.onend = () => {
-                console.log('Speech completed');
+                console.log('Web Speech completed');
                 if (!hasResolved) {
                     hasResolved = true;
                     resolve();
@@ -307,20 +315,18 @@ async function speakText(text) {
             };
             
             utterance.onerror = (e) => {
-                console.error('Speech error:', e);
+                console.error('Web Speech error:', e);
                 if (!hasResolved) {
                     hasResolved = true;
-                    // Show text as fallback
-                    showAITextPopup(text);
-                    setTimeout(resolve, Math.max(text.length * 50, 3000));
+                    resolve();
                 }
             };
             
-            // Timeout safety - ensure we don't hang forever
-            const timeoutDuration = Math.max(text.length * 100, 5000); // At least 5 seconds
+            // Timeout safety
+            const timeoutDuration = Math.max(text.length * 100, 5000);
             setTimeout(() => {
                 if (!hasResolved) {
-                    console.log('Speech timeout, forcing completion');
+                    console.log('Speech timeout');
                     hasResolved = true;
                     window.speechSynthesis.cancel();
                     resolve();
@@ -329,16 +335,14 @@ async function speakText(text) {
             
             try {
                 window.speechSynthesis.speak(utterance);
-                console.log('Speech queued successfully');
             } catch (error) {
                 console.error('Error queuing speech:', error);
                 if (!hasResolved) {
                     hasResolved = true;
-                    showAITextPopup(text);
-                    setTimeout(resolve, Math.max(text.length * 50, 3000));
+                    resolve();
                 }
             }
-        }, 250); // Longer delay for mobile/WeChat compatibility
+        }, 250);
     });
 }
 
