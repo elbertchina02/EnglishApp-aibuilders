@@ -1,5 +1,50 @@
 # Changelog - English Practice App
 
+## v1.5.0 - Volcengine Only (2026-01-07)
+
+### 🔥 Major Simplification
+
+#### Use ONLY Volcengine TTS
+- ❌ Removed: TikTok TTS
+- ❌ Removed: Google TTS (tw-ob)
+- ❌ Removed: Google TTS (gtx)
+- ✅ Kept: Volcengine (Lawrence BV138_24k_streaming) ONLY
+- ⚠️ Emergency fallback: Web Speech (only if Volcengine fails)
+
+### 🎯 Benefits
+
+#### 1. Unified Voice Experience
+- All users hear the same voice: Lawrence
+- Consistent quality across all platforms
+- No more confusion about which service is being used
+
+#### 2. Simplified Service
+- Only one primary TTS service
+- Easier to debug
+- Clearer logs
+
+#### 3. All Platforms Use Volcengine
+- WeChat: Volcengine ✅
+- Desktop browsers: Volcengine ✅
+- Mobile browsers: Volcengine ✅
+
+### 🔍 Enhanced Logging
+- Detailed Volcengine request/response logs
+- Clear success/failure indicators
+- Easy to see which service is being used
+
+---
+
+## v1.4.3 - Debug Logging (2026-01-07)
+
+### 🔍 Added Detailed TTS Logging
+- Server-side: detailed service attempt logs
+- Client-side: clear service name display
+- Emoji indicators for easy identification
+- Helps diagnose TTS issues
+
+---
+
 ## v1.4.2 - Lawrence Voice (2026-01-07)
 
 ### 🎵 Voice Change
