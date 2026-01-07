@@ -287,65 +287,35 @@ async function getChatResponse(message) {
     return await response.json();
 }
 
-// Speak text - use backend TTS for better mobile/WeChat compatibility
+// Speak text - ALWAYS use backend TTS (Volcengine only)
 async function speakText(text) {
-    // Detect if we're in WeChat
-    const inWeChat = window.isWeChat && window.isWeChat();
-    
-    // For non-WeChat browsers: use Web Speech Synthesis directly (faster and more reliable)
-    if (!inWeChat && 'speechSynthesis' in window) {
-        console.log('\n🎵 ========================================');
-        console.log('✅ TTS Service: 🌐 Web Speech Synthesis API');
-        console.log('📍 Browser: Non-WeChat (Desktop/Mobile)');
-        console.log('🎧 Voice: Browser Default English Voice');
-        console.log('========================================\n');
-        return new Promise((resolve) => {
-            // Cancel any ongoing speech
-            window.speechSynthesis.cancel();
-            
-            // Wait a bit for cancellation to complete
-            setTimeout(() => {
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = 'en-US';
-                utterance.rate = 0.9;
-                utterance.pitch = 1.0;
-                utterance.volume = 1.0;
-                
-                utterance.onend = () => resolve();
-                utterance.onerror = () => resolve();
-                
-                window.speechSynthesis.speak(utterance);
-            }, 100);
-        });
-    }
-    
-    // For WeChat: try backend TTS first
-    if (inWeChat && typeof window.speakWithBackendTTS === 'function') {
+    // Always try backend TTS first (Volcengine Lawrence)
+    if (typeof window.speakWithBackendTTS === 'function') {
         try {
             console.log('\n🎵 ========================================');
-            console.log('🔄 Trying Backend TTS (WeChat browser)...');
-            console.log('📍 Browser: WeChat');
+            console.log('🔄 Using Backend TTS (Volcengine Lawrence)...');
+            console.log('📍 Voice: BV138_24k_streaming');
             console.log('========================================\n');
             await window.speakWithBackendTTS(text);
-            console.log('\n✅ Backend TTS completed successfully\n');
+            console.log('\n✅ Volcengine TTS completed successfully\n');
             return;
         } catch (error) {
-            console.warn('\n❌ Backend TTS failed in WeChat:', error);
-            console.log('🔄 Falling back to Web Speech Synthesis...\n');
+            console.error('\n❌ Volcengine TTS failed:', error);
+            console.log('🔄 Falling back to Web Speech Synthesis as last resort...\n');
             // Fall through to Web Speech Synthesis fallback
         }
     }
     
-    // Final fallback to Web Speech Synthesis
+    // Final fallback to Web Speech Synthesis (only if Volcengine fails)
     return new Promise((resolve) => {
         if (!('speechSynthesis' in window)) {
-            console.log('Web Speech Synthesis not supported, showing text instead');
+            console.log('❌ No TTS available, showing text instead');
             alert('AI: ' + text.substring(0, 200) + (text.length > 200 ? '...' : ''));
             resolve();
             return;
         }
 
-        console.log('Using Web Speech Synthesis fallback...');
+        console.log('⚠️ Using Web Speech Synthesis fallback (Volcengine failed)...');
         
         // Cancel any ongoing speech
         window.speechSynthesis.cancel();

@@ -205,9 +205,9 @@ app.post('/api/tts', async (req, res) => {
       return res.status(400).json({ error: 'Text is empty after cleaning' });
     }
 
-    // Try multiple TTS services (use truly free APIs that work from servers)
+    // Use ONLY Volcengine TTS - No fallback services
     const ttsServices = [
-      // Service 1: Volcengine (ByteDance) TTS - Most reliable!
+      // ONLY SERVICE: Volcengine (ByteDance) TTS with Lawrence voice
       {
         name: '🔥 Volcengine (Lawrence BV138_24k_streaming)',
         fn: async () => {
@@ -215,98 +215,50 @@ app.post('/api/tts', async (req, res) => {
           const ttsUrl = 'https://openspeech.bytedance.com/api/v1/tts';
           const requestId = uuidv4();
           
+          console.log('📤 Volcengine TTS Request:');
+          console.log('   Voice: BV138_24k_streaming (Lawrence)');
+          console.log('   Text length:', limitedText.length);
+          console.log('   Request ID:', requestId);
+          
           const response = await axios.post(ttsUrl, {
-          app: {
-            appid: '5546444154',
-            token: 'access_token',
-            cluster: 'volcano_tts'
-          },
-          user: {
-            uid: 'english-app-user'
-          },
-          audio: {
-            voice_type: 'BV138_24k_streaming', // Lawrence - 情感女声 (24k高清版)
-            encoding: 'mp3',
-            speed_ratio: 1.0,
-            volume_ratio: 1.0,
-            pitch_ratio: 1.0
-          },
-          request: {
-            reqid: requestId,
-            text: limitedText,
-            text_type: 'plain',
-            operation: 'query'
-          }
-        }, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer;bGXkynVHCnU4tngd4UOPfloKpCnnOgs-'
-          },
-          timeout: 15000
-        });
-        
+            app: {
+              appid: '5546444154',
+              token: 'access_token',
+              cluster: 'volcano_tts'
+            },
+            user: {
+              uid: 'english-app-user'
+            },
+            audio: {
+              voice_type: 'BV138_24k_streaming', // Lawrence - 情感女声 (24k高清版)
+              encoding: 'mp3',
+              speed_ratio: 1.0,
+              volume_ratio: 1.0,
+              pitch_ratio: 1.0
+            },
+            request: {
+              reqid: requestId,
+              text: limitedText,
+              text_type: 'plain',
+              operation: 'query'
+            }
+          }, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer;bGXkynVHCnU4tngd4UOPfloKpCnnOgs-'
+            },
+            timeout: 15000
+          });
+          
+          console.log('📥 Volcengine Response Status:', response.status);
+          console.log('📥 Volcengine Response Data Keys:', Object.keys(response.data || {}));
+          
           // Volcengine returns JSON with base64 encoded audio
           if (response.data && response.data.data) {
+            console.log('✅ Volcengine returned valid audio data');
             return { data: Buffer.from(response.data.data, 'base64') };
           }
-          throw new Error('Invalid Volcengine TTS response');
-        }
-      },
-      // Service 2: TikTok TTS (free, no auth needed)
-      {
-        name: '🎵 TikTok TTS (en_us_001)',
-        fn: async () => {
-        const ttsUrl = 'https://tiktok-tts.weilnet.workers.dev/api/generation';
-        const response = await axios.post(ttsUrl, {
-          text: limitedText,
-          voice: 'en_us_001' // English US voice
-        }, {
-          responseType: 'arraybuffer',
-          timeout: 15000,
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-          // TikTok returns JSON with data field containing base64 audio
-          if (response.data) {
-            const jsonStr = Buffer.from(response.data).toString('utf8');
-            const json = JSON.parse(jsonStr);
-            if (json.data) {
-              return { data: Buffer.from(json.data, 'base64') };
-            }
-          }
-          throw new Error('Invalid TikTok TTS response');
-        }
-      },
-      // Service 3: Google TTS with tw-ob client
-      {
-        name: '🌐 Google TTS (tw-ob)',
-        fn: async () => {
-          const encodedText = encodeURIComponent(limitedText);
-          const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=tw-ob`;
-          return await axios.get(ttsUrl, {
-            responseType: 'arraybuffer',
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Referer': 'https://translate.google.com/'
-            },
-            timeout: 10000
-          });
-        }
-      },
-      // Service 4: Google TTS with gtx client
-      {
-        name: '🌐 Google TTS (gtx)',
-        fn: async () => {
-          const encodedText = encodeURIComponent(limitedText);
-          const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=gtx`;
-          return await axios.get(ttsUrl, {
-            responseType: 'arraybuffer',
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            },
-            timeout: 10000
-          });
+          throw new Error('Invalid Volcengine TTS response - no data field');
         }
       }
     ];
