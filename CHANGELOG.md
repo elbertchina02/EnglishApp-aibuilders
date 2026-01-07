@@ -1,5 +1,29 @@
 # Changelog - English Practice App
 
+## v1.4.2 - Lawrence Voice (2026-01-07)
+
+### 🎵 Voice Change
+
+#### Switched to Lawrence - More Natural Emotion
+- ❌ Removed: Ariana (BV503_24k_streaming) - sounded too robotic
+- ✅ Added: **Lawrence (BV138_24k_streaming)** - emotional female voice
+- ✅ Removed storytelling emotion (not needed - Lawrence has natural emotion)
+
+### 🎯 Why Lawrence?
+- More natural and human-like
+- Built-in emotional expression
+- Warmer, more approachable tone
+- Better for teaching middle school students
+- Doesn't sound like a robot!
+
+### 🔊 Features
+- 24k high-definition audio quality
+- Natural emotional delivery
+- Clear pronunciation
+- Engaging and friendly
+
+---
+
 ## v1.4.1 - HD Voice Upgrade (2026-01-07)
 
 ### 🎵 Voice Quality Improvements
