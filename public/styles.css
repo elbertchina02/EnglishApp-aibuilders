@@ -105,6 +105,16 @@ header h1 {
     border-left: 4px solid #8bc34a;
 }
 
+.message.system {
+    background: #fff3e0;
+    margin-left: 10%;
+    margin-right: 10%;
+    border-left: 4px solid #ff9800;
+    text-align: center;
+    font-weight: 500;
+    color: #e65100;
+}
+
 .message-header {
     font-weight: bold;
     margin-bottom: 8px;

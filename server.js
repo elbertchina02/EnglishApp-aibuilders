@@ -126,7 +126,16 @@ app.post('/api/chat', async (req, res) => {
     if (!hasSystemMessage) {
       messages.push({
         role: 'system',
-        content: 'You are a friendly English teacher helping middle school students practice English speaking and listening. Keep your responses encouraging, clear, and appropriate for middle school level. Use simple vocabulary and short sentences. Always respond in English.'
+        content: `You are a friendly English teacher helping middle school students practice English speaking and listening. 
+
+CRITICAL RULES:
+1. ONLY respond in English - never use Chinese or any other language
+2. If the student speaks Chinese, politely remind them: "Let's practice English! Please speak in English."
+3. Keep responses encouraging, clear, and appropriate for middle school level
+4. Use simple vocabulary and short sentences
+5. Focus on practical conversation topics
+
+Remember: This is English practice - all communication must be in English only!`
       });
     }
     
@@ -214,7 +223,7 @@ app.post('/api/tts', async (req, res) => {
             uid: 'english-app-user'
           },
           audio: {
-            voice_type: 'BV001_streaming', // English female voice
+            voice_type: 'BV503_streaming', // Ariana - 活力女声
             encoding: 'mp3',
             speed_ratio: 1.0,
             volume_ratio: 1.0,

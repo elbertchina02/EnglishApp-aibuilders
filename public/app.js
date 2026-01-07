@@ -176,6 +176,11 @@ function stopRecording() {
     }
 }
 
+// Detect if text contains Chinese characters
+function containsChinese(text) {
+    return /[\u4e00-\u9fa5]/.test(text);
+}
+
 // Process audio
 async function processAudio(audioBlob) {
     try {
@@ -185,6 +190,17 @@ async function processAudio(audioBlob) {
         // Transcribe audio
         const transcription = await transcribeAudio(audioBlob);
         console.log('Transcription:', transcription);
+        
+        // Check if user spoke Chinese
+        if (containsChinese(transcription)) {
+            updateStatus('⚠️ 请使用英文练习！');
+            addMessage('system', '⚠️ Please speak in English! This is English practice. 请用英文说话！');
+            showLoading(false);
+            setTimeout(() => {
+                updateStatus('准备就绪，点击"开始录音"用英文继续对话');
+            }, 2000);
+            return;
+        }
         
         // Add user message to conversation
         addMessage('user', transcription);
