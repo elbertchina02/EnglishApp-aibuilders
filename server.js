@@ -5,6 +5,7 @@ const axios = require('axios');
 const path = require('path');
 const https = require('https');
 const fs = require('fs');
+const { v4: uuidv4 } = require('uuid');
 require('dotenv').config();
 
 const app = express();
@@ -211,7 +212,6 @@ app.post('/api/tts', async (req, res) => {
       {
         name: '🔥 Volcengine (Lawrence BV138_24k_streaming)',
         fn: async () => {
-          const { v4: uuidv4 } = require('uuid');
           const ttsUrl = 'https://openspeech.bytedance.com/api/v1/tts';
           const requestId = uuidv4();
           
