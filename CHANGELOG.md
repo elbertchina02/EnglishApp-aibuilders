@@ -1,5 +1,28 @@
 # Changelog - English Practice App
 
+## v1.4.1 - HD Voice Upgrade (2026-01-07)
+
+### 🎵 Voice Quality Improvements
+
+#### 1. 24k High-Definition Audio
+- ✅ Upgraded: BV503_streaming → **BV503_24k_streaming**
+- ✅ Clearer pronunciation
+- ✅ Richer audio details
+- ✅ Professional sound quality
+
+#### 2. Storytelling Emotion
+- ✅ Added: `emotion: 'storytelling'`
+- ✅ More engaging and vivid delivery
+- ✅ Natural storytelling tone
+- ✅ Better learning experience
+
+### 🎯 Impact
+- Students will hear clearer, more engaging voice
+- Like listening to a teacher telling a story
+- Enhanced motivation for English practice
+
+---
+
 ## v1.4.0 - English Only Mode (2026-01-07)
 
 ### 🎯 Major Features
