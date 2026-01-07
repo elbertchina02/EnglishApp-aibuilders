@@ -223,11 +223,12 @@ app.post('/api/tts', async (req, res) => {
             uid: 'english-app-user'
           },
           audio: {
-            voice_type: 'BV503_streaming', // Ariana - 活力女声
+            voice_type: 'BV503_24k_streaming', // Ariana - 活力女声 (24k高清版)
             encoding: 'mp3',
             speed_ratio: 1.0,
             volume_ratio: 1.0,
-            pitch_ratio: 1.0
+            pitch_ratio: 1.0,
+            emotion: 'storytelling' // 讲故事情感
           },
           request: {
             reqid: requestId,
