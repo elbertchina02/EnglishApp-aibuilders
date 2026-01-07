@@ -198,7 +198,49 @@ app.post('/api/tts', async (req, res) => {
 
     // Try multiple TTS services (use truly free APIs that work from servers)
     const ttsServices = [
-      // Service 1: TikTok TTS (free, no auth needed)
+      // Service 1: Volcengine (ByteDance) TTS - Most reliable!
+      async () => {
+        const { v4: uuidv4 } = require('uuid');
+        const ttsUrl = 'https://openspeech.bytedance.com/api/v1/tts';
+        const requestId = uuidv4();
+        
+        const response = await axios.post(ttsUrl, {
+          app: {
+            appid: '5546444154',
+            token: 'access_token',
+            cluster: 'volcano_tts'
+          },
+          user: {
+            uid: 'english-app-user'
+          },
+          audio: {
+            voice_type: 'BV001_streaming', // English female voice
+            encoding: 'mp3',
+            speed_ratio: 1.0,
+            volume_ratio: 1.0,
+            pitch_ratio: 1.0
+          },
+          request: {
+            reqid: requestId,
+            text: limitedText,
+            text_type: 'plain',
+            operation: 'query'
+          }
+        }, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer;bGXkynVHCnU4tngd4UOPfloKpCnnOgs-'
+          },
+          timeout: 15000
+        });
+        
+        // Volcengine returns JSON with base64 encoded audio
+        if (response.data && response.data.data) {
+          return { data: Buffer.from(response.data.data, 'base64') };
+        }
+        throw new Error('Invalid Volcengine TTS response');
+      },
+      // Service 2: TikTok TTS (free, no auth needed)
       async () => {
         const ttsUrl = 'https://tiktok-tts.weilnet.workers.dev/api/generation';
         const response = await axios.post(ttsUrl, {
@@ -221,7 +263,7 @@ app.post('/api/tts', async (req, res) => {
         }
         throw new Error('Invalid TikTok TTS response');
       },
-      // Service 2: Google TTS with tw-ob client
+      // Service 3: Google TTS with tw-ob client
       async () => {
         const encodedText = encodeURIComponent(limitedText);
         const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=tw-ob`;
@@ -234,7 +276,7 @@ app.post('/api/tts', async (req, res) => {
           timeout: 10000
         });
       },
-      // Service 3: Google TTS with gtx client
+      // Service 4: Google TTS with gtx client
       async () => {
         const encodedText = encodeURIComponent(limitedText);
         const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=gtx`;
