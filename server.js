@@ -5,8 +5,13 @@ const axios = require('axios');
 const path = require('path');
 const https = require('https');
 const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 require('dotenv').config();
+
+// Simple UUID v4 generator (no need for uuid package)
+function generateUUID() {
+  return crypto.randomUUID();
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -213,7 +218,7 @@ app.post('/api/tts', async (req, res) => {
         name: '🔥 Volcengine (Lawrence BV138_24k_streaming)',
         fn: async () => {
           const ttsUrl = 'https://openspeech.bytedance.com/api/v1/tts';
-          const requestId = uuidv4();
+          const requestId = generateUUID();
           
           console.log('📤 Volcengine TTS Request:');
           console.log('   Voice: BV138_24k_streaming (Lawrence)');

@@ -1,6 +1,6 @@
 {
   "name": "english-app-aibuilders",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "English speaking and listening practice app for middle school students",
   "main": "server.js",
   "scripts": {
