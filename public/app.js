@@ -273,23 +273,50 @@ async function getChatResponse(message) {
 
 // Speak text - use backend TTS for better mobile/WeChat compatibility
 async function speakText(text) {
-    // Try backend TTS first (works in WeChat!)
-    if (typeof window.speakWithBackendTTS === 'function') {
+    // Detect if we're in WeChat
+    const inWeChat = window.isWeChat && window.isWeChat();
+    
+    // For non-WeChat browsers: use Web Speech Synthesis directly (faster and more reliable)
+    if (!inWeChat && 'speechSynthesis' in window) {
+        console.log('Using Web Speech Synthesis (non-WeChat browser)...');
+        return new Promise((resolve) => {
+            // Cancel any ongoing speech
+            window.speechSynthesis.cancel();
+            
+            // Wait a bit for cancellation to complete
+            setTimeout(() => {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US';
+                utterance.rate = 0.9;
+                utterance.pitch = 1.0;
+                utterance.volume = 1.0;
+                
+                utterance.onend = () => resolve();
+                utterance.onerror = () => resolve();
+                
+                window.speechSynthesis.speak(utterance);
+            }, 100);
+        });
+    }
+    
+    // For WeChat: try backend TTS first
+    if (inWeChat && typeof window.speakWithBackendTTS === 'function') {
         try {
-            console.log('Using backend TTS...');
+            console.log('Using backend TTS (WeChat browser)...');
             await window.speakWithBackendTTS(text);
             console.log('Backend TTS completed successfully');
             return;
         } catch (error) {
-            console.error('Backend TTS failed:', error);
-            // Fall through to Web Speech Synthesis
+            console.warn('Backend TTS failed in WeChat:', error);
+            // Fall through to Web Speech Synthesis fallback
         }
     }
     
-    // Fallback to Web Speech Synthesis
+    // Final fallback to Web Speech Synthesis
     return new Promise((resolve) => {
         if (!('speechSynthesis' in window)) {
-            console.error('Web Speech Synthesis not supported');
+            console.log('Web Speech Synthesis not supported, showing text instead');
+            alert('AI: ' + text.substring(0, 200) + (text.length > 200 ? '...' : ''));
             resolve();
             return;
         }
