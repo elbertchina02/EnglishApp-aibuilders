@@ -216,7 +216,12 @@ window.speakWithBackendTTS = async (text) => {
             throw new Error('No audio content received');
         }
         
-        console.log('TTS audio received, length:', data.audioContent.length);
+        console.log('\n🎵 ========================================');
+        console.log('✅ TTS SUCCESS!');
+        console.log(`📢 Service Used: ${data.service || 'Unknown'}`);
+        console.log(`📦 Audio Length: ${data.audioContent.length} bytes`);
+        console.log(`🎧 Format: ${data.format || 'mp3'}`);
+        console.log('========================================\n');
         
         // iOS WeChat: prefer Audio element first, then AudioContext
         if (isIOSWeChat()) {

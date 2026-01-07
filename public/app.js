@@ -294,7 +294,11 @@ async function speakText(text) {
     
     // For non-WeChat browsers: use Web Speech Synthesis directly (faster and more reliable)
     if (!inWeChat && 'speechSynthesis' in window) {
-        console.log('Using Web Speech Synthesis (non-WeChat browser)...');
+        console.log('\n🎵 ========================================');
+        console.log('✅ TTS Service: 🌐 Web Speech Synthesis API');
+        console.log('📍 Browser: Non-WeChat (Desktop/Mobile)');
+        console.log('🎧 Voice: Browser Default English Voice');
+        console.log('========================================\n');
         return new Promise((resolve) => {
             // Cancel any ongoing speech
             window.speechSynthesis.cancel();
@@ -318,12 +322,16 @@ async function speakText(text) {
     // For WeChat: try backend TTS first
     if (inWeChat && typeof window.speakWithBackendTTS === 'function') {
         try {
-            console.log('Using backend TTS (WeChat browser)...');
+            console.log('\n🎵 ========================================');
+            console.log('🔄 Trying Backend TTS (WeChat browser)...');
+            console.log('📍 Browser: WeChat');
+            console.log('========================================\n');
             await window.speakWithBackendTTS(text);
-            console.log('Backend TTS completed successfully');
+            console.log('\n✅ Backend TTS completed successfully\n');
             return;
         } catch (error) {
-            console.warn('Backend TTS failed in WeChat:', error);
+            console.warn('\n❌ Backend TTS failed in WeChat:', error);
+            console.log('🔄 Falling back to Web Speech Synthesis...\n');
             // Fall through to Web Speech Synthesis fallback
         }
     }

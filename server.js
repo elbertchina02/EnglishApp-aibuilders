@@ -208,12 +208,14 @@ app.post('/api/tts', async (req, res) => {
     // Try multiple TTS services (use truly free APIs that work from servers)
     const ttsServices = [
       // Service 1: Volcengine (ByteDance) TTS - Most reliable!
-      async () => {
-        const { v4: uuidv4 } = require('uuid');
-        const ttsUrl = 'https://openspeech.bytedance.com/api/v1/tts';
-        const requestId = uuidv4();
-        
-        const response = await axios.post(ttsUrl, {
+      {
+        name: '🔥 Volcengine (Lawrence BV138_24k_streaming)',
+        fn: async () => {
+          const { v4: uuidv4 } = require('uuid');
+          const ttsUrl = 'https://openspeech.bytedance.com/api/v1/tts';
+          const requestId = uuidv4();
+          
+          const response = await axios.post(ttsUrl, {
           app: {
             appid: '5546444154',
             token: 'access_token',
@@ -243,14 +245,17 @@ app.post('/api/tts', async (req, res) => {
           timeout: 15000
         });
         
-        // Volcengine returns JSON with base64 encoded audio
-        if (response.data && response.data.data) {
-          return { data: Buffer.from(response.data.data, 'base64') };
+          // Volcengine returns JSON with base64 encoded audio
+          if (response.data && response.data.data) {
+            return { data: Buffer.from(response.data.data, 'base64') };
+          }
+          throw new Error('Invalid Volcengine TTS response');
         }
-        throw new Error('Invalid Volcengine TTS response');
       },
       // Service 2: TikTok TTS (free, no auth needed)
-      async () => {
+      {
+        name: '🎵 TikTok TTS (en_us_001)',
+        fn: async () => {
         const ttsUrl = 'https://tiktok-tts.weilnet.workers.dev/api/generation';
         const response = await axios.post(ttsUrl, {
           text: limitedText,
@@ -262,40 +267,47 @@ app.post('/api/tts', async (req, res) => {
             'Content-Type': 'application/json'
           }
         });
-        // TikTok returns JSON with data field containing base64 audio
-        if (response.data) {
-          const jsonStr = Buffer.from(response.data).toString('utf8');
-          const json = JSON.parse(jsonStr);
-          if (json.data) {
-            return { data: Buffer.from(json.data, 'base64') };
+          // TikTok returns JSON with data field containing base64 audio
+          if (response.data) {
+            const jsonStr = Buffer.from(response.data).toString('utf8');
+            const json = JSON.parse(jsonStr);
+            if (json.data) {
+              return { data: Buffer.from(json.data, 'base64') };
+            }
           }
+          throw new Error('Invalid TikTok TTS response');
         }
-        throw new Error('Invalid TikTok TTS response');
       },
       // Service 3: Google TTS with tw-ob client
-      async () => {
-        const encodedText = encodeURIComponent(limitedText);
-        const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=tw-ob`;
-        return await axios.get(ttsUrl, {
-          responseType: 'arraybuffer',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Referer': 'https://translate.google.com/'
-          },
-          timeout: 10000
-        });
+      {
+        name: '🌐 Google TTS (tw-ob)',
+        fn: async () => {
+          const encodedText = encodeURIComponent(limitedText);
+          const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=tw-ob`;
+          return await axios.get(ttsUrl, {
+            responseType: 'arraybuffer',
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Referer': 'https://translate.google.com/'
+            },
+            timeout: 10000
+          });
+        }
       },
       // Service 4: Google TTS with gtx client
-      async () => {
-        const encodedText = encodeURIComponent(limitedText);
-        const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=gtx`;
-        return await axios.get(ttsUrl, {
-          responseType: 'arraybuffer',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          },
-          timeout: 10000
-        });
+      {
+        name: '🌐 Google TTS (gtx)',
+        fn: async () => {
+          const encodedText = encodeURIComponent(limitedText);
+          const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=en&client=gtx`;
+          return await axios.get(ttsUrl, {
+            responseType: 'arraybuffer',
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+            timeout: 10000
+          });
+        }
       }
     ];
 
@@ -303,13 +315,20 @@ app.post('/api/tts', async (req, res) => {
     
     // Try each service in order
     for (let i = 0; i < ttsServices.length; i++) {
+      const service = ttsServices[i];
       try {
-        console.log(`Trying TTS service ${i + 1}...`);
-        const response = await ttsServices[i]();
+        console.log(`\n========================================`);
+        console.log(`🎤 Trying TTS Service ${i + 1}: ${service.name}`);
+        console.log(`========================================`);
+        
+        const response = await service.fn();
         
         // Check if we got valid audio data
         if (response.data && response.data.length > 0) {
-          console.log(`TTS service ${i + 1} succeeded, audio length: ${response.data.length}, content-type: ${response.headers['content-type']}`);
+          console.log(`\n✅ SUCCESS! ${service.name}`);
+          console.log(`   Audio length: ${response.data.length} bytes`);
+          console.log(`   Content-type: ${response.headers?.['content-type'] || 'audio/mpeg'}`);
+          console.log(`========================================\n`);
           
           // Convert to base64 for better mobile/WeChat compatibility
           const base64Audio = Buffer.from(response.data).toString('base64');
@@ -317,18 +336,21 @@ app.post('/api/tts', async (req, res) => {
           return res.json({
             success: true,
             audioContent: base64Audio,
-            format: 'mp3'
+            format: 'mp3',
+            service: service.name // Send service name to client
           });
         } else {
-          console.error(`TTS service ${i + 1} returned empty data`);
+          console.error(`❌ ${service.name} returned empty data`);
         }
       } catch (error) {
-        console.error(`TTS service ${i + 1} failed:`, {
-          message: error.message,
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          data: error.response?.data?.toString?.()?.substring(0, 200)
-        });
+        console.error(`\n❌ FAILED: ${service.name}`);
+        console.error(`   Error: ${error.message}`);
+        console.error(`   Status: ${error.response?.status}`);
+        console.error(`   Status Text: ${error.response?.statusText}`);
+        if (error.response?.data) {
+          console.error(`   Response: ${error.response.data.toString?.()?.substring(0, 200)}`);
+        }
+        console.error(`========================================\n`);
         lastError = error;
         // Continue to next service
       }
