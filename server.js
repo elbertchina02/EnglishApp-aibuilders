@@ -228,7 +228,7 @@ app.post('/api/tts', async (req, res) => {
           const response = await axios.post(ttsUrl, {
             app: {
               appid: '5546444154',
-              token: 'access_token',
+              token: 'bGXkynVHCnU4tngd4UOPfloKpCnnOgs-',
               cluster: 'volcano_tts'
             },
             user: {
