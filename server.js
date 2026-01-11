@@ -8,6 +8,10 @@ const fs = require('fs');
 const crypto = require('crypto');
 require('dotenv').config();
 
+// Volcengine TTS credentials (env override with safe defaults)
+const VOLC_APP_ID = process.env.VOLC_APP_ID || '8125700140';
+const VOLC_TTS_TOKEN = process.env.VOLC_TTS_TOKEN || 'poFHe9MHQ1WMBOPqY8XiuIFHv8qu1Duu';
+
 // Simple UUID v4 generator (no need for uuid package)
 function generateUUID() {
   return crypto.randomUUID();
@@ -227,8 +231,8 @@ app.post('/api/tts', async (req, res) => {
           
           const response = await axios.post(ttsUrl, {
             app: {
-              appid: '8125700140',
-              token: 'access_token',
+              appid: VOLC_APP_ID,
+              token: VOLC_TTS_TOKEN,
               cluster: 'volcano_tts'
             },
             user: {
@@ -250,7 +254,7 @@ app.post('/api/tts', async (req, res) => {
           }, {
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer;poFHe9MHQ1WMBOPqY8XiuIFHv8qu1Duu'
+              'Authorization': `Bearer;${VOLC_TTS_TOKEN}`
             },
             timeout: 15000
           });
