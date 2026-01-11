@@ -8,7 +8,6 @@ let conversationHistory = [
 
 // DOM elements
 const recordBtn = document.getElementById('recordBtn');
-const stopBtn = document.getElementById('stopBtn');
 const status = document.getElementById('status');
 const loading = document.getElementById('loading');
 const conversationArea = document.getElementById('conversationArea');
@@ -131,7 +130,8 @@ async function init() {
             await processAudio(audioBlob);
         };
         
-        updateStatus('准备就绪，点击"开始录音"按钮开始');
+        setRecordingUI(false);
+        updateStatus('准备就绪，点击"开始"开始录音');
     } catch (error) {
         console.error('Initialization error:', error);
         updateStatus('初始化失败: ' + error.message);
@@ -159,8 +159,7 @@ async function startRecording() {
     mediaRecorder.start();
     isRecording = true;
     
-    recordBtn.disabled = true;
-    stopBtn.disabled = false;
+    setRecordingUI(true);
     updateStatus('🎤 正在录音...');
 }
 
@@ -170,8 +169,7 @@ function stopRecording() {
         mediaRecorder.stop();
         isRecording = false;
         
-        recordBtn.disabled = false;
-        stopBtn.disabled = true;
+        setRecordingUI(false);
         updateStatus('处理中...');
     }
 }
@@ -230,7 +228,8 @@ async function processAudio(audioBlob) {
         // Speak the response
         await speakText(aiMessage);
         
-        updateStatus('准备就绪，点击"开始录音"继续对话');
+        setRecordingUI(false);
+        updateStatus('准备就绪，点击"开始"继续对话');
         showLoading(false);
         
     } catch (error) {
@@ -238,6 +237,7 @@ async function processAudio(audioBlob) {
         updateStatus('处理失败: ' + error.message);
         showLoading(false);
         alert('处理失败，请重试。错误: ' + error.message);
+        setRecordingUI(false);
     }
 }
 
@@ -505,8 +505,31 @@ function showLoading(show) {
     loading.style.display = show ? 'flex' : 'none';
 }
 
+// Recording UI helper
+function setRecordingUI(active) {
+    if (!recordBtn) return;
+    if (active) {
+        recordBtn.classList.add('recording');
+        recordBtn.querySelector('.btn-icon').textContent = '⏹️';
+        recordBtn.querySelector('.btn-text').textContent = '结束';
+    } else {
+        recordBtn.classList.remove('recording');
+        recordBtn.querySelector('.btn-icon').textContent = '🎤';
+        recordBtn.querySelector('.btn-text').textContent = '开始';
+    }
+}
+
+// Toggle recording with single button
+function toggleRecording() {
+    if (isRecording) {
+        stopRecording();
+    } else {
+        startRecording();
+    }
+}
+
 // Event listeners
-recordBtn.addEventListener('click', startRecording);
+recordBtn.addEventListener('click', toggleRecording);
 // WeChat/iOS: make sure AudioContext init happens on a *touch* gesture (stricter than click)
 recordBtn.addEventListener('touchstart', () => {
     if (typeof window.initAudioForMobile === 'function') {
@@ -517,7 +540,6 @@ recordBtn.addEventListener('touchstart', () => {
         }
     }
 }, { passive: true });
-stopBtn.addEventListener('click', stopRecording);
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', init);
