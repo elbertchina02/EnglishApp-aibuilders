@@ -1,6 +1,14 @@
 // WeChat-compatible TTS using server-side API
 // Based on successful implementation from Lovable
 
+// Silence noisy console.log output unless explicitly enabled via ?debug=1
+const __DEBUG_LOGS__ = window.__DEBUG_LOGS__ === true || window.location.search.includes('debug=1');
+if (!__DEBUG_LOGS__ && typeof console !== 'undefined' && typeof console.log === 'function' && !console.__silenced) {
+    console.__origLog = console.log.bind(console);
+    console.log = () => {};
+    console.__silenced = true;
+}
+
 let currentAudio = null;
 let isSpeaking = false;
 let audioContext = null;
