@@ -47,8 +47,11 @@
                     <label class="field-label">课时标题</label>
                     <input id="lessonTitleInput" class="input" placeholder="Unit 3: Food and Health">
 
-                    <label class="field-label">课时内容 / Outline</label>
-                    <textarea id="lessonContextInput" class="textarea" rows="5" placeholder="Paste the lesson content or outline here..."></textarea>
+                <label class="field-label">文章（作为知识边界）</label>
+                <textarea id="lessonArticleInput" class="textarea" rows="4" placeholder="Paste the lesson article here..."></textarea>
+
+                <label class="field-label">5 回合示例对话（两位学生，AI 扮演其中一位）</label>
+                <textarea id="lessonDialogueInput" class="textarea" rows="5" placeholder="e.g.\nA: ...\nB: ...\nA: ...\nB: ...\nA: ...\nB: ..."></textarea>
 
                     <div class="panel-actions">
                         <button id="saveLessonBtn" class="record-btn slim">保存课时</button>
@@ -89,7 +92,7 @@
 
         <footer>
             <p>使用 AI Builders API 构建 | Built with AI Builders API</p>
-            <p class="version-info" id="versionInfo">v1.7.0 - Lessons + roles</p>
+            <p class="version-info" id="versionInfo">v1.7.1 - Article + dialogue templates</p>
             <p style="font-size: 11px; color: #888; margin-top: 5px;" id="browserInfo"></p>
         </footer>
     </div>

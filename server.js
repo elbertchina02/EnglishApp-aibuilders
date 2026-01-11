@@ -140,10 +140,10 @@ app.get('/api/lessons/:id', (req, res) => {
 // Create lesson (Instructor)
 app.post('/api/lessons', (req, res) => {
   try {
-    const { title, context, instructor_token } = req.body || {};
+    const { title, article, dialogue, instructor_token } = req.body || {};
 
-    if (!title || !context) {
-      return res.status(400).json({ error: 'Title and context are required' });
+    if (!title || !article || !dialogue) {
+      return res.status(400).json({ error: 'Title, article, and dialogue are required' });
     }
 
     if (INSTRUCTOR_TOKEN && instructor_token !== INSTRUCTOR_TOKEN) {
@@ -154,7 +154,8 @@ app.post('/api/lessons', (req, res) => {
     const lesson = {
       id,
       title: String(title).trim(),
-      context: String(context).trim(),
+      article: String(article).trim(),
+      dialogue: String(dialogue).trim(),
       createdAt: new Date().toISOString()
     };
     lessons.set(id, lesson);
@@ -168,7 +169,7 @@ app.post('/api/lessons', (req, res) => {
 // Chat completion endpoint
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, history, lessonId, lessonContext, mode = 'student', turn = 0, maxTurns = 5, firstTurn = false } = req.body;
+    const { message, history, lessonId, lessonContext, lessonArticle, lessonDialogue, mode = 'student', turn = 0, maxTurns = 5, firstTurn = false } = req.body;
 
     if (!message && !firstTurn) {
       return res.status(400).json({ error: 'Message is required' });
@@ -183,11 +184,12 @@ app.post('/api/chat', async (req, res) => {
     let resolvedLesson = null;
     if (lessonId && lessons.has(lessonId)) {
       resolvedLesson = lessons.get(lessonId);
-    } else if (lessonContext) {
+    } else if (lessonContext || lessonArticle || lessonDialogue) {
       resolvedLesson = {
         id: 'ad-hoc',
         title: 'Custom Lesson',
-        context: String(lessonContext).trim()
+        article: lessonArticle || lessonContext || '',
+        dialogue: lessonDialogue || ''
       };
     }
 
@@ -199,18 +201,28 @@ app.post('/api/chat', async (req, res) => {
 
     const lessonSystem = resolvedLesson
       ? `You are an encouraging English teacher for middle school students.
-You are teaching a specific lesson.
+You are guiding a lesson with a reference article and a 5-turn sample dialogue.
 Lesson Title: ${resolvedLesson.title}
-Lesson Content (context for this class):
-${resolvedLesson.context}
+Article (use as knowledge boundary, keep within this content):
+${resolvedLesson.article || ''}
 
-Dialogue rules:
-- Keep the conversation within this lesson content.
-- Maximum ${maxAllowedTurns} student replies for this lesson. The current student reply count is ${currentTurn}.
-- If the student goes off-topic, gently steer back to the lesson content.
-- Use simple vocabulary, short sentences, and stay friendly.
+Sample Dialogue (5 turns) between Student A and Student B:
+${resolvedLesson.dialogue || ''}
+
+Speaking role:
+- You act as Student B in the dialogue. The user is Student A.
+- Keep conversation close to the sample dialogue and article; small variations are fine.
+- Do not introduce facts outside the article.
+
+Flow control:
+- Maximum ${maxAllowedTurns} student replies for this lesson. Current student reply count: ${currentTurn}.
+- If the student goes off-topic, gently steer back to the article and the sample dialogue.
+- When first_turn=true, start with a warm, concise greeting and the first line aligned with the sample dialogue.
+
+Tone and style:
+- Short sentences, natural, friendly, supportive (avoid robotic phrasing).
 - Always respond in English only.
-- When starting the lesson (first_turn=true), proactively greet the student and ask a short question related to the lesson content to get them speaking.`
+- Encourage speaking, ask simple follow-ups tied to the article/dialogue.`
       : `You are a friendly English teacher helping middle school students practice English speaking and listening.
 
 Rules:

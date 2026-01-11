@@ -12,7 +12,8 @@ const roleSwitch = document.getElementById('roleSwitch');
 const studentPanel = document.getElementById('studentPanel');
 const instructorPanel = document.getElementById('instructorPanel');
 const lessonTitleInput = document.getElementById('lessonTitleInput');
-const lessonContextInput = document.getElementById('lessonContextInput');
+const lessonArticleInput = document.getElementById('lessonArticleInput');
+const lessonDialogueInput = document.getElementById('lessonDialogueInput');
 const saveLessonBtn = document.getElementById('saveLessonBtn');
 
 // MediaRecorder and related variables
@@ -21,7 +22,7 @@ let audioChunks = [];
 let isRecording = false;
 let audioUnlocked = false;
 let ttsAudioElement = null;
-let lessonContextCache = {};
+let lessonCache = {};
 let selectedLessonId = 'free';
 let maxTurns = 5;
 let studentTurns = 0;
@@ -297,7 +298,8 @@ async function getChatResponse(message, { firstTurn = false } = {}) {
             message: message,
             history: historyToSend,
             lessonId: selectedLessonId === 'free' ? null : selectedLessonId,
-            lessonContext: selectedLessonId === 'free' ? null : (lessonContextCache[selectedLessonId] || null),
+            lessonArticle: selectedLessonId === 'free' ? null : (lessonCache[selectedLessonId]?.article || null),
+            lessonDialogue: selectedLessonId === 'free' ? null : (lessonCache[selectedLessonId]?.dialogue || null),
             mode: currentRole,
             turn: studentTurns,
             maxTurns,
@@ -584,7 +586,10 @@ async function fetchLessonDetail(id) {
         const res = await fetch(`/api/lessons/${id}`);
         if (!res.ok) return null;
         const data = await res.json();
-        lessonContextCache[id] = data.context;
+        lessonCache[id] = {
+            article: data.article || '',
+            dialogue: data.dialogue || ''
+        };
         return data;
     } catch (e) {
         console.log('lesson detail error', e);
@@ -639,9 +644,10 @@ async function startLessonIntro() {
 
 async function saveLesson() {
     const title = lessonTitleInput?.value?.trim();
-    const context = lessonContextInput?.value?.trim();
-    if (!title || !context) {
-        alert('请填写课时标题和内容');
+    const article = lessonArticleInput?.value?.trim();
+    const dialogue = lessonDialogueInput?.value?.trim();
+    if (!title || !article || !dialogue) {
+        alert('请填写课时标题、文章与 5 回合对话');
         return;
     }
     try {
@@ -649,14 +655,15 @@ async function saveLesson() {
         const res = await fetch('/api/lessons', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, context })
+            body: JSON.stringify({ title, article, dialogue })
         });
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.error || '保存失败');
         }
         lessonTitleInput.value = '';
-        lessonContextInput.value = '';
+        lessonArticleInput.value = '';
+        lessonDialogueInput.value = '';
         await refreshLessons();
         alert('课时已保存！在学生模式选择该课时开始练习。');
     } catch (e) {
