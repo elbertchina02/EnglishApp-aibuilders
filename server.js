@@ -254,6 +254,7 @@ app.post('/api/tts', async (req, res) => {
           }, {
             headers: {
               'Content-Type': 'application/json',
+              'Accept': 'application/json',
               'Authorization': `Bearer;${VOLC_TTS_TOKEN}`
             },
             timeout: 15000
@@ -309,7 +310,10 @@ app.post('/api/tts', async (req, res) => {
         console.error(`   Status: ${error.response?.status}`);
         console.error(`   Status Text: ${error.response?.statusText}`);
         if (error.response?.data) {
-          console.error(`   Response: ${error.response.data.toString?.()?.substring(0, 200)}`);
+          const dataStr = typeof error.response.data === 'string'
+            ? error.response.data
+            : JSON.stringify(error.response.data);
+          console.error(`   Response: ${dataStr.substring(0, 500)}`);
         }
         console.error(`========================================\n`);
         lastError = error;
@@ -325,7 +329,7 @@ app.post('/api/tts', async (req, res) => {
     });
     res.status(500).json({
       error: 'TTS generation failed',
-      details: lastError?.message || 'All TTS services are unavailable.',
+      details: lastError?.response?.data || lastError?.message || 'All TTS services are unavailable.',
       fallback: true
     });
 
