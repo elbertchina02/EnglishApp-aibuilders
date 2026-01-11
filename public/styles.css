@@ -31,6 +31,127 @@ body {
     backdrop-filter: blur(10px);
 }
 
+.role-switch {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.role-btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.04);
+    color: #cbd5f5;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 700;
+}
+
+.role-btn.active {
+    background: linear-gradient(135deg, #2563eb 0%, #10b981 100%);
+    color: #fff;
+    box-shadow: 0 10px 25px rgba(37,99,235,0.3);
+}
+
+.panels {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.panel {
+    background: linear-gradient(145deg, rgba(17,24,39,0.7), rgba(10,14,24,0.7));
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.panel-title {
+    font-weight: 700;
+    color: #e5e7eb;
+}
+
+.panel-subtitle {
+    color: #94a3b8;
+    font-size: 0.9em;
+}
+
+.panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.field-label {
+    font-size: 0.9em;
+    color: #9fb5e7;
+}
+
+.select, .input, .textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    color: #e5e7eb;
+}
+
+.textarea {
+    resize: vertical;
+}
+
+.panel-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.ghost-btn {
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    color: #cbd5f5;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ghost-btn:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.badge {
+    background: rgba(16,185,129,0.15);
+    color: #34d399;
+    padding: 6px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(52,211,153,0.3);
+    font-weight: 700;
+    font-size: 0.85em;
+}
+
+.hint {
+    font-size: 0.85em;
+    color: #64748b;
+}
+.record-btn.slim {
+    padding: 10px 18px;
+    font-size: 1em;
+}
+
 header {
     text-align: center;
     margin-bottom: 30px;

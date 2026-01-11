@@ -20,6 +20,10 @@ function generateUUID() {
 const app = express();
 const PORT = process.env.PORT || 3000;
 const AI_BUILDER_BASE_URL = 'https://space.ai-builders.com/backend';
+const INSTRUCTOR_TOKEN = process.env.INSTRUCTOR_TOKEN || null;
+
+// In-memory lessons store (simple demo; replace with DB in production)
+const lessons = new Map();
 
 // Middleware
 app.use(cors());
@@ -114,12 +118,59 @@ app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
   }
 });
 
+// List lessons
+app.get('/api/lessons', (req, res) => {
+  const data = Array.from(lessons.values()).map(({ id, title, createdAt }) => ({
+    id,
+    title,
+    createdAt
+  }));
+  res.json({ lessons: data });
+});
+
+// Lesson detail
+app.get('/api/lessons/:id', (req, res) => {
+  const lesson = lessons.get(req.params.id);
+  if (!lesson) {
+    return res.status(404).json({ error: 'Lesson not found' });
+  }
+  res.json(lesson);
+});
+
+// Create lesson (Instructor)
+app.post('/api/lessons', (req, res) => {
+  try {
+    const { title, context, instructor_token } = req.body || {};
+
+    if (!title || !context) {
+      return res.status(400).json({ error: 'Title and context are required' });
+    }
+
+    if (INSTRUCTOR_TOKEN && instructor_token !== INSTRUCTOR_TOKEN) {
+      return res.status(401).json({ error: 'Invalid instructor token' });
+    }
+
+    const id = generateUUID();
+    const lesson = {
+      id,
+      title: String(title).trim(),
+      context: String(context).trim(),
+      createdAt: new Date().toISOString()
+    };
+    lessons.set(id, lesson);
+    res.json({ lesson });
+  } catch (error) {
+    console.error('Create lesson error:', error);
+    res.status(500).json({ error: 'Failed to create lesson' });
+  }
+});
+
 // Chat completion endpoint
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, history } = req.body;
+    const { message, history, lessonId, lessonContext, mode = 'student', turn = 0, maxTurns = 5, firstTurn = false } = req.body;
 
-    if (!message) {
+    if (!message && !firstTurn) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
@@ -128,37 +179,71 @@ app.post('/api/chat', async (req, res) => {
       return res.status(500).json({ error: 'AI_BUILDER_TOKEN not configured' });
     }
 
+    // Build lesson context (from stored or passed)
+    let resolvedLesson = null;
+    if (lessonId && lessons.has(lessonId)) {
+      resolvedLesson = lessons.get(lessonId);
+    } else if (lessonContext) {
+      resolvedLesson = {
+        id: 'ad-hoc',
+        title: 'Custom Lesson',
+        context: String(lessonContext).trim()
+      };
+    }
+
+    const currentTurn = Number(turn) || 0;
+    const maxAllowedTurns = Math.max(1, Math.min(Number(maxTurns) || 5, 10));
+
     // Build messages array - ensure we have a proper array
     let messages = [];
-    
-    // Add system message if not already in history
-    const hasSystemMessage = Array.isArray(history) && history.some(msg => msg.role === 'system');
-    if (!hasSystemMessage) {
-      messages.push({
-        role: 'system',
-        content: `You are a friendly English teacher helping middle school students practice English speaking and listening. 
 
-CRITICAL RULES:
-1. ONLY respond in English - never use Chinese or any other language
-2. If the student speaks Chinese, politely remind them: "Let's practice English! Please speak in English."
-3. Keep responses encouraging, clear, and appropriate for middle school level
-4. Use simple vocabulary and short sentences
-5. Focus on practical conversation topics
+    const lessonSystem = resolvedLesson
+      ? `You are an encouraging English teacher for middle school students.
+You are teaching a specific lesson.
+Lesson Title: ${resolvedLesson.title}
+Lesson Content (context for this class):
+${resolvedLesson.context}
 
-Remember: This is English practice - all communication must be in English only!`
-      });
-    }
-    
-    // Add history if provided
+Dialogue rules:
+- Keep the conversation within this lesson content.
+- Maximum ${maxAllowedTurns} student replies for this lesson. The current student reply count is ${currentTurn}.
+- If the student goes off-topic, gently steer back to the lesson content.
+- Use simple vocabulary, short sentences, and stay friendly.
+- Always respond in English only.
+- When starting the lesson (first_turn=true), proactively greet the student and ask a short question related to the lesson content to get them speaking.`
+      : `You are a friendly English teacher helping middle school students practice English speaking and listening.
+
+Rules:
+- ONLY respond in English - never use Chinese or any other language.
+- Use simple vocabulary and short sentences.
+- Keep responses encouraging, clear, and appropriate for middle school level.
+- Focus on practical conversation topics.
+- If the student speaks Chinese, gently remind them to speak English.`;
+
+    // System message (single)
+    messages.push({
+      role: 'system',
+      content: lessonSystem
+    });
+
+    // Add history if provided (exclude any prior system)
     if (Array.isArray(history) && history.length > 0) {
       messages = messages.concat(history.filter(msg => msg.role !== 'system'));
     }
-    
-    // Add current message
-    messages.push({
-      role: 'user',
-      content: message
-    });
+
+    // If first turn and lesson, ask model to lead
+    if (firstTurn && resolvedLesson) {
+      messages.push({
+        role: 'user',
+        content: `Start the lesson with a short, friendly question based strictly on the lesson content. Keep it concise.`
+      });
+    } else {
+      // Add current user message
+      messages.push({
+        role: 'user',
+        content: message
+      });
+    }
 
     console.log('Sending chat request with', messages.length, 'messages');
 

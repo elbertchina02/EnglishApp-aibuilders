@@ -13,6 +13,51 @@
             <p class="subtitle">English Speaking & Listening Practice</p>
         </header>
 
+        <div class="role-switch" id="roleSwitch">
+            <button class="role-btn active" data-role="student">学生模式</button>
+            <button class="role-btn" data-role="instructor">教师模式</button>
+        </div>
+
+        <div class="panels">
+            <div class="panel student-panel" id="studentPanel">
+                <div class="panel-header">
+                    <div>
+                        <p class="panel-title">选择课时或自由练习</p>
+                        <p class="panel-subtitle">最多 5 轮对话，机器人会围绕课文引导</p>
+                    </div>
+                    <button id="startLessonBtn" class="ghost-btn">AI 开场</button>
+                </div>
+                <div class="panel-body">
+                    <label class="field-label">课时</label>
+                    <select id="lessonSelect" class="select">
+                        <option value="free">自由模式（不限制话题）</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="panel instructor-panel" id="instructorPanel" style="display:none;">
+                <div class="panel-header">
+                    <div>
+                        <p class="panel-title">创建课时</p>
+                        <p class="panel-subtitle">输入本节课的英文材料，供机器人限定话题</p>
+                    </div>
+                    <span class="badge">教师</span>
+                </div>
+                <div class="panel-body">
+                    <label class="field-label">课时标题</label>
+                    <input id="lessonTitleInput" class="input" placeholder="Unit 3: Food and Health">
+
+                    <label class="field-label">课时内容 / Outline</label>
+                    <textarea id="lessonContextInput" class="textarea" rows="5" placeholder="Paste the lesson content or outline here..."></textarea>
+
+                    <div class="panel-actions">
+                        <button id="saveLessonBtn" class="record-btn slim">保存课时</button>
+                    </div>
+                    <p class="hint">可选：后端可设置 INSTRUCTOR_TOKEN 来保护创建接口</p>
+                </div>
+            </div>
+        </div>
+
         <div class="main-content">
             <!-- Conversation Display Area -->
             <div class="conversation-area" id="conversationArea">
@@ -44,7 +89,7 @@
 
         <footer>
             <p>使用 AI Builders API 构建 | Built with AI Builders API</p>
-            <p class="version-info" id="versionInfo">v1.6.0 - Dark tech UI + single button</p>
+            <p class="version-info" id="versionInfo">v1.7.0 - Lessons + roles</p>
             <p style="font-size: 11px; color: #888; margin-top: 5px;" id="browserInfo"></p>
         </footer>
     </div>

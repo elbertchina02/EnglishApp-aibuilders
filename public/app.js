@@ -1,16 +1,19 @@
-// Conversation history
-let conversationHistory = [
-    {
-        role: 'system',
-        content: 'You are a friendly English teacher helping middle school students practice English speaking and listening. Keep your responses encouraging, clear, and appropriate for middle school level. Use simple vocabulary and short sentences. Always respond in English.'
-    }
-];
+// Conversation history (system prompt now built server-side)
+let conversationHistory = [];
 
 // DOM elements
 const recordBtn = document.getElementById('recordBtn');
 const status = document.getElementById('status');
 const loading = document.getElementById('loading');
 const conversationArea = document.getElementById('conversationArea');
+const lessonSelect = document.getElementById('lessonSelect');
+const startLessonBtn = document.getElementById('startLessonBtn');
+const roleSwitch = document.getElementById('roleSwitch');
+const studentPanel = document.getElementById('studentPanel');
+const instructorPanel = document.getElementById('instructorPanel');
+const lessonTitleInput = document.getElementById('lessonTitleInput');
+const lessonContextInput = document.getElementById('lessonContextInput');
+const saveLessonBtn = document.getElementById('saveLessonBtn');
 
 // MediaRecorder and related variables
 let mediaRecorder;
@@ -18,6 +21,11 @@ let audioChunks = [];
 let isRecording = false;
 let audioUnlocked = false;
 let ttsAudioElement = null;
+let lessonContextCache = {};
+let selectedLessonId = 'free';
+let maxTurns = 5;
+let studentTurns = 0;
+let currentRole = 'student';
 
 // Check if WeChat - single definition for the entire app
 window.isWeChat = window.isWeChat || function() {
@@ -93,6 +101,9 @@ async function init() {
             }
         }
         
+        await refreshLessons();
+        attachRoleSwitch();
+
         // Note: Don't initialize AudioContext here - wait for user gesture
         console.log('App initialized, AudioContext will be created on first user interaction');
         
@@ -130,8 +141,7 @@ async function init() {
             await processAudio(audioBlob);
         };
         
-        setRecordingUI(false);
-        updateStatus('准备就绪，点击"开始"开始录音');
+        updateStatus('准备就绪，点击"开始"按钮开始');
     } catch (error) {
         console.error('Initialization error:', error);
         updateStatus('初始化失败: ' + error.message);
@@ -143,6 +153,16 @@ async function init() {
 async function startRecording() {
     if (!mediaRecorder) {
         alert('录音功能未初始化，请刷新页面重试。');
+        return;
+    }
+
+    if (currentRole !== 'student') {
+        alert('当前是教师模式，切换到学生模式后再开始录音。');
+        return;
+    }
+
+    if (studentTurns >= maxTurns && selectedLessonId !== 'free') {
+        updateStatus('本节课已完成 5 轮对话，切换新课时继续。');
         return;
     }
     
@@ -202,11 +222,12 @@ async function processAudio(audioBlob) {
         
         // Add user message to conversation
         addMessage('user', transcription);
+        studentTurns += 1;
         
         updateStatus('正在生成回复...');
         
         // Get AI response (history will be sent automatically)
-        const response = await getChatResponse(transcription);
+        const response = await getChatResponse(transcription, { firstTurn: false });
         const aiMessage = response.choices[0].message.content;
         console.log('AI Response:', aiMessage);
         
@@ -228,8 +249,9 @@ async function processAudio(audioBlob) {
         // Speak the response
         await speakText(aiMessage);
         
-        setRecordingUI(false);
-        updateStatus('准备就绪，点击"开始"继续对话');
+        updateStatus(studentTurns >= maxTurns && selectedLessonId !== 'free'
+            ? '本节课 5 轮已满，选择新课时或自由模式继续。'
+            : '准备就绪，点击"开始"继续对话');
         showLoading(false);
         
     } catch (error) {
@@ -237,7 +259,6 @@ async function processAudio(audioBlob) {
         updateStatus('处理失败: ' + error.message);
         showLoading(false);
         alert('处理失败，请重试。错误: ' + error.message);
-        setRecordingUI(false);
     }
 }
 
@@ -261,7 +282,7 @@ async function transcribeAudio(audioBlob) {
 }
 
 // Get chat response using AI Builders API
-async function getChatResponse(message) {
+async function getChatResponse(message, { firstTurn = false } = {}) {
     // Filter out system message from history when sending to backend
     const historyToSend = conversationHistory.filter(msg => msg.role !== 'system');
     
@@ -274,7 +295,13 @@ async function getChatResponse(message) {
         },
         body: JSON.stringify({
             message: message,
-            history: historyToSend
+            history: historyToSend,
+            lessonId: selectedLessonId === 'free' ? null : selectedLessonId,
+            lessonContext: selectedLessonId === 'free' ? null : (lessonContextCache[selectedLessonId] || null),
+            mode: currentRole,
+            turn: studentTurns,
+            maxTurns,
+            firstTurn
         })
     });
     
@@ -516,16 +543,152 @@ function setRecordingUI(active) {
         recordBtn.classList.remove('recording');
         recordBtn.querySelector('.btn-icon').textContent = '🎤';
         recordBtn.querySelector('.btn-text').textContent = '开始';
+        recordBtn.disabled = false;
     }
 }
 
-// Toggle recording with single button
 function toggleRecording() {
     if (isRecording) {
         stopRecording();
     } else {
         startRecording();
     }
+}
+
+// Lesson helpers
+async function refreshLessons() {
+    try {
+        const res = await fetch('/api/lessons');
+        if (!res.ok) return;
+        const data = await res.json();
+        populateLessonSelect(data.lessons || []);
+    } catch (e) {
+        console.log('lessons fetch error', e);
+    }
+}
+
+function populateLessonSelect(lessons) {
+    if (!lessonSelect) return;
+    lessonSelect.innerHTML = `<option value="free">自由模式（不限制话题）</option>`;
+    lessons.forEach((l) => {
+        const opt = document.createElement('option');
+        opt.value = l.id;
+        opt.textContent = l.title;
+        lessonSelect.appendChild(opt);
+    });
+}
+
+async function fetchLessonDetail(id) {
+    if (!id || id === 'free') return null;
+    try {
+        const res = await fetch(`/api/lessons/${id}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        lessonContextCache[id] = data.context;
+        return data;
+    } catch (e) {
+        console.log('lesson detail error', e);
+        return null;
+    }
+}
+
+function resetConversationArea() {
+    conversationArea.innerHTML = `
+        <div class="welcome-message">
+            <p>👋 欢迎！选择课时后开始练习，最多 5 轮对话。</p>
+            <p class="english-text">Pick a lesson, then tap Start. 5 turns per lesson.</p>
+        </div>
+    `;
+    conversationHistory = [];
+    studentTurns = 0;
+}
+
+async function onLessonChange() {
+    selectedLessonId = lessonSelect?.value || 'free';
+    studentTurns = 0;
+    conversationHistory = [];
+    resetConversationArea();
+    updateStatus(selectedLessonId === 'free'
+        ? '自由模式：话题不限。点击开始录音。'
+        : '课时已选择，点击 AI 开场让机器人先说第一句。');
+    if (selectedLessonId !== 'free') {
+        await fetchLessonDetail(selectedLessonId);
+    }
+}
+
+async function startLessonIntro() {
+    if (selectedLessonId === 'free') {
+        alert('请选择一个课时再让 AI 开场，或直接自由练习。');
+        return;
+    }
+    try {
+        showLoading(true);
+        const response = await getChatResponse('start lesson', { firstTurn: true });
+        const aiMessage = response.choices[0].message.content;
+        conversationHistory.push({ role: 'assistant', content: aiMessage });
+        addMessage('assistant', aiMessage);
+        await speakText(aiMessage);
+        updateStatus('轮到你了，点击开始录音作答（最多 5 轮）。');
+    } catch (e) {
+        console.error(e);
+        alert('AI 开场失败，请重试。');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function saveLesson() {
+    const title = lessonTitleInput?.value?.trim();
+    const context = lessonContextInput?.value?.trim();
+    if (!title || !context) {
+        alert('请填写课时标题和内容');
+        return;
+    }
+    try {
+        saveLessonBtn.disabled = true;
+        const res = await fetch('/api/lessons', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, context })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || '保存失败');
+        }
+        lessonTitleInput.value = '';
+        lessonContextInput.value = '';
+        await refreshLessons();
+        alert('课时已保存！在学生模式选择该课时开始练习。');
+    } catch (e) {
+        console.error(e);
+        alert(e.message || '保存课时失败');
+    } finally {
+        saveLessonBtn.disabled = false;
+    }
+}
+
+function attachRoleSwitch() {
+    if (!roleSwitch) return;
+    roleSwitch.addEventListener('click', (e) => {
+        const btn = e.target.closest('.role-btn');
+        if (!btn) return;
+        const role = btn.dataset.role;
+        if (!role || role === currentRole) return;
+        currentRole = role;
+        document.querySelectorAll('.role-btn').forEach(b => b.classList.toggle('active', b.dataset.role === role));
+        if (role === 'student') {
+            studentPanel.style.display = '';
+            instructorPanel.style.display = 'none';
+            recordBtn.disabled = false;
+            updateStatus('学生模式：选择课时或自由练习。');
+        } else {
+            studentPanel.style.display = 'none';
+            instructorPanel.style.display = '';
+            recordBtn.disabled = true;
+            updateStatus('教师模式：创建课时，不支持录音对话。');
+        }
+        resetConversationArea();
+    });
 }
 
 // Event listeners
@@ -540,6 +703,10 @@ recordBtn.addEventListener('touchstart', () => {
         }
     }
 }, { passive: true });
+
+lessonSelect?.addEventListener('change', onLessonChange);
+startLessonBtn?.addEventListener('click', startLessonIntro);
+saveLessonBtn?.addEventListener('click', saveLesson);
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', init);
