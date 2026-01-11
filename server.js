@@ -227,8 +227,8 @@ app.post('/api/tts', async (req, res) => {
           
           const response = await axios.post(ttsUrl, {
             app: {
-              appid: '5546444154',
-              token: 'bGXkynVHCnU4tngd4UOPfloKpCnnOgs-',
+              appid: '8125700140',
+              token: 'access_token',
               cluster: 'volcano_tts'
             },
             user: {
@@ -250,7 +250,7 @@ app.post('/api/tts', async (req, res) => {
           }, {
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer;bGXkynVHCnU4tngd4UOPfloKpCnnOgs-'
+              'Authorization': 'Bearer;poFHe9MHQ1WMBOPqY8XiuIFHv8qu1Duu'
             },
             timeout: 15000
           });
