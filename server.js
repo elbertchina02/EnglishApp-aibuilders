@@ -9,8 +9,8 @@ const crypto = require('crypto');
 require('dotenv').config();
 
 // Volcengine TTS credentials (env override with safe defaults)
-const VOLC_APP_ID = process.env.VOLC_APP_ID || '8125700140';
-const VOLC_TTS_TOKEN = process.env.VOLC_TTS_TOKEN || 'poFHe9MHQ1WMBOPqY8XiuIFHv8qu1Duu';
+const VOLC_APP_ID = process.env.VOLC_APP_ID || '5546444154';
+const VOLC_TTS_TOKEN = process.env.VOLC_TTS_TOKEN || 'bGXkynVHCnU4tngd4UOPfloKpCnnOgs-';
 
 // Simple UUID v4 generator (no need for uuid package)
 function generateUUID() {
@@ -217,15 +217,15 @@ app.post('/api/tts', async (req, res) => {
 
     // Use ONLY Volcengine TTS - No fallback services
     const ttsServices = [
-      // ONLY SERVICE: Volcengine (ByteDance) TTS with Lawrence voice
+      // ONLY SERVICE: Volcengine (ByteDance) TTS with Anna voice
       {
-        name: '🔥 Volcengine (Lawrence BV138_24k_streaming)',
+        name: '🔥 Volcengine (Anna BV040_streaming)',
         fn: async () => {
           const ttsUrl = 'https://openspeech.bytedance.com/api/v1/tts';
           const requestId = generateUUID();
           
           console.log('📤 Volcengine TTS Request:');
-          console.log('   Voice: BV138_24k_streaming (Lawrence)');
+          console.log('   Voice: BV040_streaming (Anna)');
           console.log('   Text length:', limitedText.length);
           console.log('   Request ID:', requestId);
           
@@ -239,7 +239,7 @@ app.post('/api/tts', async (req, res) => {
               uid: 'english-app-user'
             },
             audio: {
-              voice_type: 'BV138_24k_streaming', // Lawrence - 情感女声 (24k高清版)
+              voice_type: 'BV040_streaming', // Anna - 亲切女声
               encoding: 'mp3',
               speed_ratio: 1.0,
               volume_ratio: 1.0,
