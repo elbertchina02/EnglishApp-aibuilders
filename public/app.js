@@ -15,6 +15,11 @@ const lessonTitleInput = document.getElementById('lessonTitleInput');
 const lessonArticleInput = document.getElementById('lessonArticleInput');
 const lessonDialogueInput = document.getElementById('lessonDialogueInput');
 const saveLessonBtn = document.getElementById('saveLessonBtn');
+const usernameInput = document.getElementById('usernameInput');
+const passwordInput = document.getElementById('passwordInput');
+const loginBtn = document.getElementById('loginBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const authStatus = document.getElementById('authStatus');
 
 // MediaRecorder and related variables
 let mediaRecorder;
@@ -27,11 +32,184 @@ let selectedLessonId = 'free';
 let maxTurns = 5;
 let studentTurns = 0;
 let currentRole = 'student';
+let authToken = localStorage.getItem('authToken') || '';
+let currentUser = null;
 
 // Check if WeChat - single definition for the entire app
 window.isWeChat = window.isWeChat || function() {
     return /MicroMessenger/i.test(navigator.userAgent);
 };
+
+// Auth helpers
+function setAuthSession(token, user) {
+    authToken = token || '';
+    currentUser = user || null;
+    if (authToken) {
+        localStorage.setItem('authToken', authToken);
+        window.__AUTH_TOKEN = authToken; // for wechatTts.js
+    } else {
+        localStorage.removeItem('authToken');
+        window.__AUTH_TOKEN = '';
+    }
+    updateAuthUI();
+}
+
+function clearAuthSession(message) {
+    authToken = '';
+    currentUser = null;
+    localStorage.removeItem('authToken');
+    window.__AUTH_TOKEN = '';
+    conversationHistory = [];
+    studentTurns = 0;
+    selectedLessonId = 'free';
+    resetConversationArea();
+    updateAuthUI();
+    if (message) {
+        updateStatus(message);
+    }
+}
+
+function updateAuthUI() {
+    if (authStatus) {
+        if (currentUser) {
+            authStatus.textContent = `已登录：${currentUser.username} (${currentUser.role})`;
+        } else {
+            authStatus.textContent = '未登录';
+        }
+    }
+    if (loginBtn) loginBtn.disabled = !!currentUser;
+    if (logoutBtn) logoutBtn.disabled = !currentUser;
+    if (usernameInput) usernameInput.disabled = !!currentUser;
+    if (passwordInput) passwordInput.disabled = !!currentUser;
+
+    // Role and panel visibility based on user role
+    if (currentUser) {
+        switchRole(currentUser.role, { force: true });
+    } else {
+        document.querySelectorAll('.role-btn').forEach(b => b.classList.toggle('active', b.dataset.role === 'student'));
+        studentPanel.style.display = '';
+        instructorPanel.style.display = 'none';
+        recordBtn.disabled = true;
+        updateStatus('请先登录后再开始练习');
+    }
+}
+
+function ensureAuth() {
+    if (!currentUser) {
+        alert('请先登录');
+        return false;
+    }
+    return true;
+}
+
+async function restoreSession() {
+    if (!authToken) return;
+    try {
+        const res = await fetch('/api/me', {
+            headers: { Authorization: `Bearer ${authToken}` }
+        });
+        if (!res.ok) {
+            throw new Error('Session invalid');
+        }
+        const data = await res.json();
+        setAuthSession(authToken, data.user);
+    } catch (e) {
+        clearAuthSession();
+    }
+}
+
+function handleSessionExpired() {
+    clearAuthSession('登录已失效，请重新登录');
+    alert('登录已失效，请重新登录');
+}
+
+async function login() {
+    const username = usernameInput?.value?.trim();
+    const password = passwordInput?.value || '';
+    if (!username || !password) {
+        alert('请输入用户名和密码');
+        return;
+    }
+    try {
+        loginBtn.disabled = true;
+        const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || '登录失败');
+        }
+        const data = await res.json();
+        setAuthSession(data.token, data.user);
+        updateStatus('登录成功');
+        await refreshLessons();
+    } catch (e) {
+        alert(e.message || '登录失败');
+    } finally {
+        loginBtn.disabled = false;
+    }
+}
+
+async function logout() {
+    try {
+        if (authToken) {
+            await fetch('/api/logout', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${authToken}` }
+            }).catch(() => {});
+        }
+    } finally {
+        clearAuthSession('已退出，请重新登录');
+    }
+}
+
+async function apiFetch(url, options = {}) {
+    const opts = { ...options };
+    opts.headers = { ...(options.headers || {}) };
+    if (authToken) {
+        opts.headers.Authorization = `Bearer ${authToken}`;
+    }
+    const res = await fetch(url, opts);
+    if (res.status === 401) {
+        handleSessionExpired();
+        throw new Error('Unauthorized');
+    }
+    if (res.status === 403) {
+        alert('当前账号无此操作权限');
+        throw new Error('Forbidden');
+    }
+    return res;
+}
+
+function switchRole(role, { force = false } = {}) {
+    if (!force) {
+        if (!currentUser) {
+            alert('请先登录');
+            return;
+        }
+        if (currentUser.role === 'student' && role === 'instructor') {
+            alert('学生账号无法进入教师模式');
+            return;
+        }
+    }
+
+    currentRole = role;
+    document.querySelectorAll('.role-btn').forEach(b => b.classList.toggle('active', b.dataset.role === role));
+    if (role === 'student') {
+        studentPanel.style.display = '';
+        instructorPanel.style.display = 'none';
+        recordBtn.disabled = !currentUser || currentUser.role !== 'student';
+        updateStatus(currentUser ? '学生模式：选择课时或自由练习。' : '请先登录后再练习');
+    } else {
+        studentPanel.style.display = 'none';
+        instructorPanel.style.display = '';
+        recordBtn.disabled = true;
+        updateStatus('教师模式：创建或编辑课时');
+    }
+    resetConversationArea();
+}
 
 // Check if browser supports MediaRecorder
 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -92,6 +270,9 @@ function unlockAudio() {
 // Initialize
 async function init() {
     try {
+        updateAuthUI();
+        await restoreSession();
+
         // Show browser info
         const browserInfo = document.getElementById('browserInfo');
         if (browserInfo) {
@@ -101,8 +282,12 @@ async function init() {
                 browserInfo.textContent = '支持完整语音功能';
             }
         }
-        
-        await refreshLessons();
+
+        if (currentUser) {
+            await refreshLessons();
+        } else {
+            updateStatus('请先登录后再开始练习');
+        }
         attachRoleSwitch();
 
         // Note: Don't initialize AudioContext here - wait for user gesture
@@ -152,6 +337,11 @@ async function init() {
 
 // Start recording
 async function startRecording() {
+    if (!ensureAuth()) return;
+    if (currentUser?.role !== 'student') {
+        alert('仅学生账号可录音练习');
+        return;
+    }
     if (!mediaRecorder) {
         alert('录音功能未初始化，请刷新页面重试。');
         return;
@@ -268,7 +458,7 @@ async function transcribeAudio(audioBlob) {
     const formData = new FormData();
     formData.append('audio', audioBlob, 'recording.webm');
     
-    const response = await fetch('/api/transcribe', {
+    const response = await apiFetch('/api/transcribe', {
         method: 'POST',
         body: formData
     });
@@ -289,7 +479,7 @@ async function getChatResponse(message, { firstTurn = false } = {}) {
     
     console.log('Sending chat request, history length:', historyToSend.length);
     
-    const response = await fetch('/api/chat', {
+    const response = await apiFetch('/api/chat', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -559,9 +749,15 @@ function toggleRecording() {
 
 // Lesson helpers
 async function refreshLessons() {
+    if (!currentUser) {
+        populateLessonSelect([]);
+        return;
+    }
     try {
-        const res = await fetch('/api/lessons');
-        if (!res.ok) return;
+        const res = await apiFetch('/api/lessons');
+        if (!res.ok) {
+            return;
+        }
         const data = await res.json();
         populateLessonSelect(data.lessons || []);
     } catch (e) {
@@ -583,7 +779,7 @@ function populateLessonSelect(lessons) {
 async function fetchLessonDetail(id) {
     if (!id || id === 'free') return null;
     try {
-        const res = await fetch(`/api/lessons/${id}`);
+        const res = await apiFetch(`/api/lessons/${id}`);
         if (!res.ok) return null;
         const data = await res.json();
         lessonCache[id] = {
@@ -609,6 +805,7 @@ function resetConversationArea() {
 }
 
 async function onLessonChange() {
+    if (!ensureAuth()) return;
     selectedLessonId = lessonSelect?.value || 'free';
     studentTurns = 0;
     conversationHistory = [];
@@ -622,6 +819,11 @@ async function onLessonChange() {
 }
 
 async function startLessonIntro() {
+    if (!ensureAuth()) return;
+    if (currentUser?.role !== 'student') {
+        alert('仅学生账号可开始课时对话');
+        return;
+    }
     if (selectedLessonId === 'free') {
         alert('请选择一个课时再让 AI 开场，或直接自由练习。');
         return;
@@ -643,6 +845,11 @@ async function startLessonIntro() {
 }
 
 async function saveLesson() {
+    if (!ensureAuth()) return;
+    if (currentUser?.role !== 'instructor') {
+        alert('只有教师账号可以创建课时');
+        return;
+    }
     const title = lessonTitleInput?.value?.trim();
     const article = lessonArticleInput?.value?.trim();
     const dialogue = lessonDialogueInput?.value?.trim();
@@ -652,7 +859,7 @@ async function saveLesson() {
     }
     try {
         saveLessonBtn.disabled = true;
-        const res = await fetch('/api/lessons', {
+        const res = await apiFetch('/api/lessons', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title, article, dialogue })
@@ -681,20 +888,7 @@ function attachRoleSwitch() {
         if (!btn) return;
         const role = btn.dataset.role;
         if (!role || role === currentRole) return;
-        currentRole = role;
-        document.querySelectorAll('.role-btn').forEach(b => b.classList.toggle('active', b.dataset.role === role));
-        if (role === 'student') {
-            studentPanel.style.display = '';
-            instructorPanel.style.display = 'none';
-            recordBtn.disabled = false;
-            updateStatus('学生模式：选择课时或自由练习。');
-        } else {
-            studentPanel.style.display = 'none';
-            instructorPanel.style.display = '';
-            recordBtn.disabled = true;
-            updateStatus('教师模式：创建课时，不支持录音对话。');
-        }
-        resetConversationArea();
+        switchRole(role);
     });
 }
 
@@ -714,6 +908,8 @@ recordBtn.addEventListener('touchstart', () => {
 lessonSelect?.addEventListener('change', onLessonChange);
 startLessonBtn?.addEventListener('click', startLessonIntro);
 saveLessonBtn?.addEventListener('click', saveLesson);
+loginBtn?.addEventListener('click', login);
+logoutBtn?.addEventListener('click', logout);
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', init);

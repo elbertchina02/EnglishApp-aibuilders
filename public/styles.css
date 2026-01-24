@@ -31,6 +31,51 @@ body {
     backdrop-filter: blur(10px);
 }
 
+.auth-panel {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 12px;
+    padding: 14px;
+    margin-bottom: 14px;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    background: linear-gradient(145deg, rgba(17,24,39,0.7), rgba(10,14,24,0.7));
+}
+
+.auth-left {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.auth-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.auth-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.auth-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.auth-status {
+    color: #cbd5f5;
+    font-weight: 700;
+    text-align: right;
+}
+
+.ghost-btn.danger {
+    border-color: rgba(248,113,113,0.4);
+    color: #fca5a5;
+}
+
 .role-switch {
     display: flex;
     gap: 10px;

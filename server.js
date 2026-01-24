@@ -22,12 +22,52 @@ const PORT = process.env.PORT || 3000;
 const AI_BUILDER_BASE_URL = 'https://space.ai-builders.com/backend';
 const INSTRUCTOR_TOKEN = process.env.INSTRUCTOR_TOKEN || null;
 
+// In-memory user store and sessions (demo only)
+const users = [
+  { id: 'u-instructor-1', username: 'instructor', password: 'teach123', role: 'instructor' },
+  { id: 'u-student-1', username: 'student', password: 'learn123', role: 'student' }
+];
+const sessions = new Map(); // token -> { userId, username, role, createdAt }
+
 // In-memory lessons store (simple demo; replace with DB in production)
 const lessons = new Map();
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Attach user session from Bearer token (if present)
+app.use((req, _res, next) => {
+  const auth = req.headers.authorization || '';
+  if (auth.startsWith('Bearer ')) {
+    const token = auth.replace('Bearer ', '').trim();
+    const session = sessions.get(token);
+    if (session) {
+      req.user = session;
+    }
+  }
+  next();
+});
+
+// Simple auth guards
+function requireAuth(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
+
+function requireRole(role) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (req.user.role !== role) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    next();
+  };
+}
 
 // Configure multer for audio file uploads
 const upload = multer({ 
@@ -75,8 +115,66 @@ app.get('/api/version', (req, res) => {
   }
 });
 
+// Auth: login
+app.post('/api/login', (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    const user = users.find(u => u.username === String(username).trim());
+    if (!user || user.password !== String(password)) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = generateUUID();
+    const session = {
+      token,
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+      createdAt: new Date().toISOString()
+    };
+    sessions.set(token, session);
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Auth: current user
+app.get('/api/me', requireAuth, (req, res) => {
+  res.json({
+    user: {
+      id: req.user.userId,
+      username: req.user.username,
+      role: req.user.role
+    }
+  });
+});
+
+// Auth: logout
+app.post('/api/logout', requireAuth, (req, res) => {
+  const auth = req.headers.authorization || '';
+  if (auth.startsWith('Bearer ')) {
+    const token = auth.replace('Bearer ', '').trim();
+    sessions.delete(token);
+  }
+  res.json({ success: true });
+});
+
 // Transcribe audio endpoint
-app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
+app.post('/api/transcribe', requireAuth, upload.single('audio'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No audio file provided' });
@@ -119,7 +217,7 @@ app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
 });
 
 // List lessons
-app.get('/api/lessons', (req, res) => {
+app.get('/api/lessons', requireAuth, (req, res) => {
   const data = Array.from(lessons.values()).map(({ id, title, createdAt }) => ({
     id,
     title,
@@ -129,7 +227,7 @@ app.get('/api/lessons', (req, res) => {
 });
 
 // Lesson detail
-app.get('/api/lessons/:id', (req, res) => {
+app.get('/api/lessons/:id', requireAuth, (req, res) => {
   const lesson = lessons.get(req.params.id);
   if (!lesson) {
     return res.status(404).json({ error: 'Lesson not found' });
@@ -138,7 +236,7 @@ app.get('/api/lessons/:id', (req, res) => {
 });
 
 // Create lesson (Instructor)
-app.post('/api/lessons', (req, res) => {
+app.post('/api/lessons', requireRole('instructor'), (req, res) => {
   try {
     const { title, article, dialogue, instructor_token } = req.body || {};
 
@@ -166,8 +264,54 @@ app.post('/api/lessons', (req, res) => {
   }
 });
 
+// Update lesson (Instructor)
+app.put('/api/lessons/:id', requireRole('instructor'), (req, res) => {
+  try {
+    const { title, article, dialogue, instructor_token } = req.body || {};
+    const lesson = lessons.get(req.params.id);
+    if (!lesson) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+    if (!title || !article || !dialogue) {
+      return res.status(400).json({ error: 'Title, article, and dialogue are required' });
+    }
+    if (INSTRUCTOR_TOKEN && instructor_token !== INSTRUCTOR_TOKEN) {
+      return res.status(401).json({ error: 'Invalid instructor token' });
+    }
+
+    lesson.title = String(title).trim();
+    lesson.article = String(article).trim();
+    lesson.dialogue = String(dialogue).trim();
+    lesson.updatedAt = new Date().toISOString();
+    lessons.set(lesson.id, lesson);
+    res.json({ lesson });
+  } catch (error) {
+    console.error('Update lesson error:', error);
+    res.status(500).json({ error: 'Failed to update lesson' });
+  }
+});
+
+// Delete lesson (Instructor)
+app.delete('/api/lessons/:id', requireRole('instructor'), (req, res) => {
+  try {
+    const { instructor_token } = req.body || {};
+    const lesson = lessons.get(req.params.id);
+    if (!lesson) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+    if (INSTRUCTOR_TOKEN && instructor_token !== INSTRUCTOR_TOKEN) {
+      return res.status(401).json({ error: 'Invalid instructor token' });
+    }
+    lessons.delete(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete lesson error:', error);
+    res.status(500).json({ error: 'Failed to delete lesson' });
+  }
+});
+
 // Chat completion endpoint
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', requireAuth, async (req, res) => {
   try {
     const { message, history, lessonId, lessonContext, lessonArticle, lessonDialogue, mode = 'student', turn = 0, maxTurns = 5, firstTurn = false } = req.body;
 
@@ -287,7 +431,7 @@ Rules:
 });
 
 // Text-to-Speech endpoint - Returns base64 audio for WeChat compatibility
-app.post('/api/tts', async (req, res) => {
+app.post('/api/tts', requireAuth, async (req, res) => {
   try {
     const { text } = req.body;
 

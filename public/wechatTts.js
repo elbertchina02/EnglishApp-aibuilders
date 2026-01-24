@@ -205,11 +205,16 @@ window.speakWithBackendTTS = async (text) => {
     try {
         console.log('Requesting TTS from backend...');
         
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+        if (window.__AUTH_TOKEN) {
+            headers['Authorization'] = `Bearer ${window.__AUTH_TOKEN}`;
+        }
+
         const response = await fetch('/api/tts', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers,
             body: JSON.stringify({ text: text })
         });
         

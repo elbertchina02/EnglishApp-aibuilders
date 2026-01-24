@@ -13,6 +13,24 @@
             <p class="subtitle">English Speaking & Listening Practice</p>
         </header>
 
+        <div class="auth-panel">
+            <div class="auth-left">
+                <label class="field-label">登录</label>
+                <div class="auth-fields">
+                    <input id="usernameInput" class="input" placeholder="用户名 (instructor / student)">
+                    <input id="passwordInput" class="input" placeholder="密码" type="password">
+                </div>
+                <div class="auth-actions">
+                    <button id="loginBtn" class="ghost-btn">登录</button>
+                    <button id="logoutBtn" class="ghost-btn danger" disabled>退出</button>
+                </div>
+                <p class="hint">演示账号：instructor/teach123 或 student/learn123</p>
+            </div>
+            <div class="auth-right">
+                <p id="authStatus" class="auth-status">未登录</p>
+            </div>
+        </div>
+
         <div class="role-switch" id="roleSwitch">
             <button class="role-btn active" data-role="student">学生模式</button>
             <button class="role-btn" data-role="instructor">教师模式</button>
@@ -92,7 +110,7 @@
 
         <footer>
             <p>使用 AI Builders API 构建 | Built with AI Builders API</p>
-            <p class="version-info" id="versionInfo">v1.7.1 - Article + dialogue templates</p>
+            <p class="version-info" id="versionInfo">v1.8.0 - Auth + roles</p>
             <p style="font-size: 11px; color: #888; margin-top: 5px;" id="browserInfo"></p>
         </footer>
     </div>
