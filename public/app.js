@@ -84,7 +84,13 @@ function updateAuthUI() {
 
     // Role and panel visibility based on user role
     if (currentUser) {
-        switchRole(currentUser.role, { force: true });
+        // Instructors see role switch to toggle between manage & practice
+        // Students only see student panel (hide role switch)
+        if (roleSwitch) {
+            roleSwitch.style.display = currentUser.role === 'instructor' ? '' : 'none';
+        }
+        // Both roles start in student (practice) mode
+        switchRole('student', { force: true });
     } else {
         document.querySelectorAll('.role-btn').forEach(b => b.classList.toggle('active', b.dataset.role === 'student'));
         studentPanel.style.display = '';
@@ -190,7 +196,7 @@ function switchRole(role, { force = false } = {}) {
             return;
         }
         if (currentUser.role === 'student' && role === 'instructor') {
-            alert('学生账号无法进入教师模式');
+            alert('学生账号无法管理课程');
             return;
         }
     }
@@ -200,13 +206,13 @@ function switchRole(role, { force = false } = {}) {
     if (role === 'student') {
         studentPanel.style.display = '';
         instructorPanel.style.display = 'none';
-        recordBtn.disabled = !currentUser || currentUser.role !== 'student';
-        updateStatus(currentUser ? '学生模式：选择课时或自由练习。' : '请先登录后再练习');
+        recordBtn.disabled = !currentUser;
+        updateStatus(currentUser ? '练习模式：选择课时或自由练习。' : '请先登录后再练习');
     } else {
         studentPanel.style.display = 'none';
         instructorPanel.style.display = '';
         recordBtn.disabled = true;
-        updateStatus('教师模式：创建或编辑课时');
+        updateStatus('管理模式：创建或编辑课时');
     }
     resetConversationArea();
 }
@@ -338,17 +344,13 @@ async function init() {
 // Start recording
 async function startRecording() {
     if (!ensureAuth()) return;
-    if (currentUser?.role !== 'student') {
-        alert('仅学生账号可录音练习');
-        return;
-    }
     if (!mediaRecorder) {
         alert('录音功能未初始化，请刷新页面重试。');
         return;
     }
 
     if (currentRole !== 'student') {
-        alert('当前是教师模式，切换到学生模式后再开始录音。');
+        alert('当前是管理模式，请切换到练习模式后再录音。');
         return;
     }
 
@@ -820,8 +822,8 @@ async function onLessonChange() {
 
 async function startLessonIntro() {
     if (!ensureAuth()) return;
-    if (currentUser?.role !== 'student') {
-        alert('仅学生账号可开始课时对话');
+    if (currentRole !== 'student') {
+        alert('请切换到练习模式后再开始课时对话');
         return;
     }
     if (selectedLessonId === 'free') {
