@@ -70,33 +70,29 @@ function clearAuthSession(message) {
 }
 
 function updateAuthUI() {
-    if (authStatus) {
-        if (currentUser) {
-            authStatus.textContent = `已登录：${currentUser.username} (${currentUser.role})`;
-        } else {
-            authStatus.textContent = '未登录';
-        }
-    }
-    if (loginBtn) loginBtn.disabled = !!currentUser;
-    if (logoutBtn) logoutBtn.disabled = !currentUser;
-    if (usernameInput) usernameInput.disabled = !!currentUser;
-    if (passwordInput) passwordInput.disabled = !!currentUser;
+    const loginScreen = document.getElementById('loginScreen');
+    const appContent = document.getElementById('appContent');
 
-    // Role and panel visibility based on user role
     if (currentUser) {
-        // Instructors see role switch to toggle between manage & practice
-        // Students only see student panel (hide role switch)
+        // Logged in: hide login, show app
+        if (loginScreen) loginScreen.style.display = 'none';
+        if (appContent) appContent.style.display = '';
+        if (authStatus) {
+            const roleLabel = currentUser.role === 'instructor' ? '教师' : '学生';
+            authStatus.textContent = `${currentUser.username}（${roleLabel}）`;
+        }
+        // Instructors see role switch; students don't
         if (roleSwitch) {
             roleSwitch.style.display = currentUser.role === 'instructor' ? '' : 'none';
         }
-        // Both roles start in student (practice) mode
         switchRole('student', { force: true });
     } else {
-        document.querySelectorAll('.role-btn').forEach(b => b.classList.toggle('active', b.dataset.role === 'student'));
-        studentPanel.style.display = '';
-        instructorPanel.style.display = 'none';
-        recordBtn.disabled = true;
-        updateStatus('请先登录后再开始练习');
+        // Not logged in: show login, hide app
+        if (loginScreen) loginScreen.style.display = '';
+        if (appContent) appContent.style.display = 'none';
+        if (usernameInput) usernameInput.disabled = false;
+        if (passwordInput) passwordInput.disabled = false;
+        if (loginBtn) loginBtn.disabled = false;
     }
 }
 
@@ -912,6 +908,9 @@ startLessonBtn?.addEventListener('click', startLessonIntro);
 saveLessonBtn?.addEventListener('click', saveLesson);
 loginBtn?.addEventListener('click', login);
 logoutBtn?.addEventListener('click', logout);
+// Enter key triggers login
+usernameInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+passwordInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', init);
