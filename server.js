@@ -6,6 +6,8 @@ const path = require('path');
 const https = require('https');
 const fs = require('fs');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+const db = require('./db');
 require('dotenv').config();
 
 // Volcengine TTS credentials (env override with safe defaults)
@@ -22,28 +24,37 @@ const PORT = process.env.PORT || 3000;
 const AI_BUILDER_BASE_URL = 'https://space.ai-builders.com/backend';
 const INSTRUCTOR_TOKEN = process.env.INSTRUCTOR_TOKEN || null;
 
-// In-memory user store and sessions (demo only)
-const users = [
-  { id: 'u-instructor-1', username: 'instructor', password: 'teach123', role: 'instructor' },
-  { id: 'u-student-1', username: 'student', password: 'learn123', role: 'student' }
-];
-const sessions = new Map(); // token -> { userId, username, role, createdAt }
-
-// In-memory lessons store (simple demo; replace with DB in production)
-const lessons = new Map();
+// Database-backed storage (PostgreSQL on Azure)
+// Tables: users, sessions, lessons, lesson_messages
+// See db.js for schema and initialization
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
 // Attach user session from Bearer token (if present)
-app.use((req, _res, next) => {
+app.use(async (req, _res, next) => {
   const auth = req.headers.authorization || '';
   if (auth.startsWith('Bearer ')) {
     const token = auth.replace('Bearer ', '').trim();
-    const session = sessions.get(token);
-    if (session) {
-      req.user = session;
+    try {
+      const { rows } = await db.query(
+        `SELECT s.token, s.user_id, u.username, u.role, s.created_at
+         FROM sessions s JOIN users u ON s.user_id = u.id
+         WHERE s.token = $1 AND s.expires_at > NOW()`,
+        [token]
+      );
+      if (rows.length > 0) {
+        req.user = {
+          token: rows[0].token,
+          userId: rows[0].user_id,
+          username: rows[0].username,
+          role: rows[0].role,
+          createdAt: rows[0].created_at
+        };
+      }
+    } catch (err) {
+      console.error('Session lookup error:', err.message);
     }
   }
   next();
@@ -116,27 +127,32 @@ app.get('/api/version', (req, res) => {
 });
 
 // Auth: login
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body || {};
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const user = users.find(u => u.username === String(username).trim());
-    if (!user || user.password !== String(password)) {
+    const { rows } = await db.query(
+      'SELECT id, username, password_hash, role FROM users WHERE username = $1',
+      [String(username).trim()]
+    );
+    if (rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const user = rows[0];
+    const valid = await bcrypt.compare(String(password), user.password_hash);
+    if (!valid) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const token = generateUUID();
-    const session = {
-      token,
-      userId: user.id,
-      username: user.username,
-      role: user.role,
-      createdAt: new Date().toISOString()
-    };
-    sessions.set(token, session);
+    await db.query(
+      'INSERT INTO sessions (token, user_id) VALUES ($1, $2)',
+      [token, user.id]
+    );
 
     res.json({
       token,
@@ -164,13 +180,18 @@ app.get('/api/me', requireAuth, (req, res) => {
 });
 
 // Auth: logout
-app.post('/api/logout', requireAuth, (req, res) => {
-  const auth = req.headers.authorization || '';
-  if (auth.startsWith('Bearer ')) {
-    const token = auth.replace('Bearer ', '').trim();
-    sessions.delete(token);
+app.post('/api/logout', requireAuth, async (req, res) => {
+  try {
+    const auth = req.headers.authorization || '';
+    if (auth.startsWith('Bearer ')) {
+      const token = auth.replace('Bearer ', '').trim();
+      await db.query('DELETE FROM sessions WHERE token = $1', [token]);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.json({ success: true }); // Still log out client-side
   }
-  res.json({ success: true });
 });
 
 // Transcribe audio endpoint
@@ -217,26 +238,54 @@ app.post('/api/transcribe', requireAuth, upload.single('audio'), async (req, res
 });
 
 // List lessons
-app.get('/api/lessons', requireAuth, (req, res) => {
-  const data = Array.from(lessons.values()).map(({ id, title, createdAt }) => ({
-    id,
-    title,
-    createdAt
-  }));
-  res.json({ lessons: data });
+app.get('/api/lessons', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT id, title, created_at AS "createdAt" FROM lessons ORDER BY created_at DESC'
+    );
+    res.json({ lessons: rows });
+  } catch (error) {
+    console.error('List lessons error:', error);
+    res.status(500).json({ error: 'Failed to list lessons' });
+  }
 });
 
 // Lesson detail
-app.get('/api/lessons/:id', requireAuth, (req, res) => {
-  const lesson = lessons.get(req.params.id);
-  if (!lesson) {
-    return res.status(404).json({ error: 'Lesson not found' });
+app.get('/api/lessons/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT id, title, article, dialogue, created_at AS "createdAt", updated_at AS "updatedAt" FROM lessons WHERE id = $1',
+      [req.params.id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Lesson detail error:', error);
+    res.status(500).json({ error: 'Failed to get lesson' });
   }
-  res.json(lesson);
+});
+
+// Get conversation history for a lesson (current user)
+app.get('/api/lessons/:id/messages', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, role, content, turn_index AS "turnIndex", created_at AS "createdAt"
+       FROM lesson_messages
+       WHERE lesson_id = $1 AND user_id = $2
+       ORDER BY created_at ASC`,
+      [req.params.id, req.user.userId]
+    );
+    res.json({ messages: rows });
+  } catch (error) {
+    console.error('Lesson messages error:', error);
+    res.status(500).json({ error: 'Failed to get messages' });
+  }
 });
 
 // Create lesson (Instructor)
-app.post('/api/lessons', requireRole('instructor'), (req, res) => {
+app.post('/api/lessons', requireRole('instructor'), async (req, res) => {
   try {
     const { title, article, dialogue, instructor_token } = req.body || {};
 
@@ -248,16 +297,13 @@ app.post('/api/lessons', requireRole('instructor'), (req, res) => {
       return res.status(401).json({ error: 'Invalid instructor token' });
     }
 
-    const id = generateUUID();
-    const lesson = {
-      id,
-      title: String(title).trim(),
-      article: String(article).trim(),
-      dialogue: String(dialogue).trim(),
-      createdAt: new Date().toISOString()
-    };
-    lessons.set(id, lesson);
-    res.json({ lesson });
+    const { rows } = await db.query(
+      `INSERT INTO lessons (title, article, dialogue, created_by)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, title, article, dialogue, created_at AS "createdAt"`,
+      [String(title).trim(), String(article).trim(), String(dialogue).trim(), req.user.userId]
+    );
+    res.json({ lesson: rows[0] });
   } catch (error) {
     console.error('Create lesson error:', error);
     res.status(500).json({ error: 'Failed to create lesson' });
@@ -265,26 +311,28 @@ app.post('/api/lessons', requireRole('instructor'), (req, res) => {
 });
 
 // Update lesson (Instructor)
-app.put('/api/lessons/:id', requireRole('instructor'), (req, res) => {
+app.put('/api/lessons/:id', requireRole('instructor'), async (req, res) => {
   try {
     const { title, article, dialogue, instructor_token } = req.body || {};
-    const lesson = lessons.get(req.params.id);
-    if (!lesson) {
-      return res.status(404).json({ error: 'Lesson not found' });
-    }
+
     if (!title || !article || !dialogue) {
       return res.status(400).json({ error: 'Title, article, and dialogue are required' });
     }
+
     if (INSTRUCTOR_TOKEN && instructor_token !== INSTRUCTOR_TOKEN) {
       return res.status(401).json({ error: 'Invalid instructor token' });
     }
 
-    lesson.title = String(title).trim();
-    lesson.article = String(article).trim();
-    lesson.dialogue = String(dialogue).trim();
-    lesson.updatedAt = new Date().toISOString();
-    lessons.set(lesson.id, lesson);
-    res.json({ lesson });
+    const { rows, rowCount } = await db.query(
+      `UPDATE lessons SET title = $1, article = $2, dialogue = $3, updated_at = NOW()
+       WHERE id = $4
+       RETURNING id, title, article, dialogue, created_at AS "createdAt", updated_at AS "updatedAt"`,
+      [String(title).trim(), String(article).trim(), String(dialogue).trim(), req.params.id]
+    );
+    if (rowCount === 0) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+    res.json({ lesson: rows[0] });
   } catch (error) {
     console.error('Update lesson error:', error);
     res.status(500).json({ error: 'Failed to update lesson' });
@@ -292,17 +340,17 @@ app.put('/api/lessons/:id', requireRole('instructor'), (req, res) => {
 });
 
 // Delete lesson (Instructor)
-app.delete('/api/lessons/:id', requireRole('instructor'), (req, res) => {
+app.delete('/api/lessons/:id', requireRole('instructor'), async (req, res) => {
   try {
     const { instructor_token } = req.body || {};
-    const lesson = lessons.get(req.params.id);
-    if (!lesson) {
-      return res.status(404).json({ error: 'Lesson not found' });
-    }
     if (INSTRUCTOR_TOKEN && instructor_token !== INSTRUCTOR_TOKEN) {
       return res.status(401).json({ error: 'Invalid instructor token' });
     }
-    lessons.delete(req.params.id);
+
+    const { rowCount } = await db.query('DELETE FROM lessons WHERE id = $1', [req.params.id]);
+    if (rowCount === 0) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
     res.json({ success: true });
   } catch (error) {
     console.error('Delete lesson error:', error);
@@ -324,11 +372,20 @@ app.post('/api/chat', requireAuth, async (req, res) => {
       return res.status(500).json({ error: 'AI_BUILDER_TOKEN not configured' });
     }
 
-    // Build lesson context (from stored or passed)
+    // Build lesson context (from DB or passed inline)
     let resolvedLesson = null;
-    if (lessonId && lessons.has(lessonId)) {
-      resolvedLesson = lessons.get(lessonId);
-    } else if (lessonContext || lessonArticle || lessonDialogue) {
+    if (lessonId) {
+      try {
+        const { rows } = await db.query(
+          'SELECT id, title, article, dialogue FROM lessons WHERE id = $1',
+          [lessonId]
+        );
+        if (rows.length > 0) resolvedLesson = rows[0];
+      } catch (dbErr) {
+        console.error('Lesson lookup error:', dbErr.message);
+      }
+    }
+    if (!resolvedLesson && (lessonContext || lessonArticle || lessonDialogue)) {
       resolvedLesson = {
         id: 'ad-hoc',
         title: 'Custom Lesson',
@@ -419,6 +476,27 @@ Rules:
         }
       }
     );
+
+    // Save conversation messages to DB (non-critical, don't block response)
+    const aiContent = response.data?.choices?.[0]?.message?.content || '';
+    if (resolvedLesson && resolvedLesson.id !== 'ad-hoc') {
+      try {
+        if (!firstTurn && message) {
+          await db.query(
+            'INSERT INTO lesson_messages (lesson_id, user_id, role, content, turn_index) VALUES ($1, $2, $3, $4, $5)',
+            [resolvedLesson.id, req.user.userId, 'user', message, currentTurn]
+          );
+        }
+        if (aiContent) {
+          await db.query(
+            'INSERT INTO lesson_messages (lesson_id, user_id, role, content, turn_index) VALUES ($1, $2, $3, $4, $5)',
+            [resolvedLesson.id, req.user.userId, 'assistant', aiContent, firstTurn ? 0 : currentTurn]
+          );
+        }
+      } catch (dbErr) {
+        console.error('Failed to save chat messages:', dbErr.message);
+      }
+    }
 
     res.json(response.data);
   } catch (error) {
@@ -592,9 +670,23 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-  console.log(`Make sure AI_BUILDER_TOKEN is set in your .env file`);
-  console.log(`Version endpoint: http://localhost:${PORT}/api/version`);
-});
+// Initialize database and start server
+(async () => {
+  try {
+    await db.initDB();
+    await db.seedDefaultUsers(bcrypt);
+
+    // Clean expired sessions every hour
+    setInterval(() => db.cleanExpiredSessions().catch(console.error), 60 * 60 * 1000);
+
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`Database: PostgreSQL (Azure)`);
+      console.log(`Version endpoint: http://localhost:${PORT}/api/version`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+})();
 
